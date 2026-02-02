@@ -144,4 +144,4 @@ For questions or support, please open an issue or contact the maintainers.
 
 ---
 
-Made with ❤️ by the SkillLens Team
+Made with ❤️ by the Prasanna Barge
