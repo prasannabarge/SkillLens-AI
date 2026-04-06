@@ -60,7 +60,7 @@ SkillLens/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/skilllens.git
+git clone https://github.com/prasannabarge/skilllens.git
 cd skilllens
 
 # Start all services
