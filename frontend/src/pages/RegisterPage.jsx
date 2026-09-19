@@ -1,13 +1,18 @@
 /**
  * RegisterPage Component
- * User registration with backend integration
+ * Seamless user account onboarding with career role targets
  */
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { User, Mail, Lock, Eye, EyeOff, Briefcase, Compass, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+import { JOB_ROLES } from '../utils/constants'
+import { toast } from 'sonner'
 
 function RegisterPage() {
     const navigate = useNavigate()
@@ -21,18 +26,8 @@ function RegisterPage() {
         currentRole: '',
         targetRole: '',
     })
+    const [showPassword, setShowPassword] = useState(false)
     const [formError, setFormError] = useState('')
-
-    const roles = [
-        { id: 'frontend-developer', label: 'Frontend Developer' },
-        { id: 'backend-developer', label: 'Backend Developer' },
-        { id: 'fullstack-developer', label: 'Full Stack Developer' },
-        { id: 'data-scientist', label: 'Data Scientist' },
-        { id: 'devops-engineer', label: 'DevOps Engineer' },
-        { id: 'ml-engineer', label: 'ML Engineer' },
-        { id: 'product-manager', label: 'Product Manager' },
-        { id: 'other', label: 'Other' },
-    ]
 
     const handleChange = (e) => {
         const { name, value } = e.target
@@ -45,183 +40,203 @@ function RegisterPage() {
         e.preventDefault()
         setFormError('')
 
-        // Validation
-        if (!formData.name || !formData.email || !formData.password) {
-            setFormError('Please fill in all required fields')
+        if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
+            setFormError('Please fill in all required fields.')
             return
         }
 
         if (formData.password.length < 8) {
-            setFormError('Password must be at least 8 characters')
+            setFormError('Password must be at least 8 characters long.')
             return
         }
 
         if (formData.password !== formData.confirmPassword) {
-            setFormError('Passwords do not match')
+            setFormError('Passwords do not match.')
             return
         }
 
         try {
             await register({
-                name: formData.name,
-                email: formData.email,
+                name: formData.name.trim(),
+                email: formData.email.trim(),
                 password: formData.password,
                 currentRole: formData.currentRole,
                 targetRole: formData.targetRole,
             })
+            toast.success('Account created successfully!')
             navigate('/dashboard')
         } catch (err) {
-            setFormError(err.message || 'Registration failed. Please try again.')
+            const msg = err.message || 'Registration failed. Please check your information and try again.'
+            setFormError(msg)
+            toast.error(msg)
         }
     }
 
+    const isPasswordLongEnough = formData.password.length >= 8
+    const doPasswordsMatch = formData.password && formData.password === formData.confirmPassword
+
     return (
-        <div className="min-h-screen flex flex-col">
+        <div className="min-h-screen flex flex-col bg-background text-slate-100">
             <Navbar />
 
-            <main className="flex-1 flex items-center justify-center px-6 py-12">
-                <div className="w-full max-w-md">
-                    <div className="card p-8">
-                        <h1 className="text-3xl font-bold text-center mb-2">
-                            Create Account
-                        </h1>
-                        <p className="text-slate-400 text-center mb-8">
-                            Start your skill development journey
-                        </p>
+            <main className="flex-1 flex items-center justify-center px-4 py-16 relative">
+                {/* Background Ambient */}
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="w-full max-w-lg relative z-10">
+                    <div className="bg-surface-elevated/90 border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6">
+                        <div className="text-center space-y-1.5">
+                            <h1 className="text-2xl font-bold tracking-tight text-white">
+                                Create Your Account
+                            </h1>
+                            <p className="text-xs text-slate-400">
+                                Begin assessing your technical competencies and building career roadmaps
+                            </p>
+                        </div>
 
                         {(formError || error) && (
-                            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg mb-6">
-                                {formError || error}
+                            <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2.5 animate-in fade-in duration-150">
+                                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                                <span>{formError || error}</span>
                             </div>
                         )}
 
-                        <form onSubmit={handleSubmit} className="space-y-5">
-                            <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
-                                    Full Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    id="name"
-                                    name="name"
-                                    value={formData.name}
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <Input
+                                label="Full Name"
+                                name="name"
+                                id="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                icon={User}
+                                placeholder="Alex Mercer"
+                                autoComplete="name"
+                                required
+                            />
+
+                            <Input
+                                label="Email Address"
+                                type="email"
+                                name="email"
+                                id="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                icon={Mail}
+                                placeholder="alex@domain.com"
+                                autoComplete="email"
+                                required
+                            />
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <Input
+                                    label="Password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    name="password"
+                                    id="password"
+                                    value={formData.password}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                                    placeholder="John Doe"
+                                    icon={Lock}
+                                    placeholder="Min 8 characters"
+                                    autoComplete="new-password"
+                                    required
+                                    rightSlot={
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="text-slate-400 hover:text-slate-200 transition-colors"
+                                            tabIndex={-1}
+                                        >
+                                            {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                        </button>
+                                    }
+                                />
+
+                                <Input
+                                    label="Confirm Password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    name="confirmPassword"
+                                    id="confirmPassword"
+                                    value={formData.confirmPassword}
+                                    onChange={handleChange}
+                                    icon={Lock}
+                                    placeholder="Re-enter password"
+                                    autoComplete="new-password"
                                     required
                                 />
                             </div>
 
-                            <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                                    Email Address *
-                                </label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                                    placeholder="you@example.com"
-                                    required
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
-                                        Password *
-                                    </label>
-                                    <input
-                                        type="password"
-                                        id="password"
-                                        name="password"
-                                        value={formData.password}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                                        placeholder="••••••••"
-                                        required
-                                    />
+                            {/* Password hints */}
+                            {formData.password && (
+                                <div className="flex items-center gap-4 text-[11px] text-slate-400 px-1">
+                                    <span className={`flex items-center gap-1 ${isPasswordLongEnough ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                        <CheckCircle2 className="w-3 h-3" /> 8+ characters
+                                    </span>
+                                    {formData.confirmPassword && (
+                                        <span className={`flex items-center gap-1 ${doPasswordsMatch ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                            <CheckCircle2 className="w-3 h-3" /> Passwords match
+                                        </span>
+                                    )}
                                 </div>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                                 <div>
-                                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-300 mb-2">
-                                        Confirm *
+                                    <label htmlFor="currentRole" className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
+                                        <Briefcase className="w-3.5 h-3.5 text-slate-400" />
+                                        Current Role (Optional)
                                     </label>
-                                    <input
-                                        type="password"
-                                        id="confirmPassword"
-                                        name="confirmPassword"
-                                        value={formData.confirmPassword}
+                                    <select
+                                        id="currentRole"
+                                        name="currentRole"
+                                        value={formData.currentRole}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                                        placeholder="••••••••"
-                                        required
-                                    />
+                                        className="w-full px-3 py-2.5 bg-surface-elevated border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition-all"
+                                    >
+                                        <option value="">Select current role</option>
+                                        {JOB_ROLES.map(role => (
+                                            <option key={role.id} value={role.id}>{role.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="targetRole" className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
+                                        <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                                        Target Role (Optional)
+                                    </label>
+                                    <select
+                                        id="targetRole"
+                                        name="targetRole"
+                                        value={formData.targetRole}
+                                        onChange={handleChange}
+                                        className="w-full px-3 py-2.5 bg-surface-elevated border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition-all"
+                                    >
+                                        <option value="">Select target role</option>
+                                        {JOB_ROLES.map(role => (
+                                            <option key={role.id} value={role.id}>{role.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 
-                            <div>
-                                <label htmlFor="currentRole" className="block text-sm font-medium text-slate-300 mb-2">
-                                    Current Role (Optional)
-                                </label>
-                                <select
-                                    id="currentRole"
-                                    name="currentRole"
-                                    value={formData.currentRole}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white"
-                                >
-                                    <option value="">Select your current role</option>
-                                    {roles.map(role => (
-                                        <option key={role.id} value={role.id}>{role.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label htmlFor="targetRole" className="block text-sm font-medium text-slate-300 mb-2">
-                                    Target Role (Optional)
-                                </label>
-                                <select
-                                    id="targetRole"
-                                    name="targetRole"
-                                    value={formData.targetRole}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white"
-                                >
-                                    <option value="">Select your target role</option>
-                                    {roles.map(role => (
-                                        <option key={role.id} value={role.id}>{role.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <button
+                            <Button
                                 type="submit"
-                                disabled={loading}
-                                className="w-full btn-primary py-3 flex items-center justify-center"
+                                variant="primary"
+                                size="md"
+                                loading={loading}
+                                loadingText="Creating account..."
+                                className="w-full mt-3"
                             >
-                                {loading ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Creating account...
-                                    </>
-                                ) : (
-                                    'Create Account'
-                                )}
-                            </button>
+                                Complete Registration
+                            </Button>
                         </form>
 
-                        <p className="mt-8 text-center text-slate-400">
+                        <div className="pt-4 border-t border-white/5 text-center text-xs text-slate-400">
                             Already have an account?{' '}
-                            <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-medium">
-                                Sign in
+                            <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-medium inline-flex items-center gap-1">
+                                Sign in <ArrowRight className="w-3 h-3" />
                             </Link>
-                        </p>
+                        </div>
                     </div>
                 </div>
             </main>

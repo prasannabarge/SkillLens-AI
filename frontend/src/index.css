@@ -4,88 +4,83 @@
 
 /* Custom base styles */
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   html {
     scroll-behavior: smooth;
+    background-color: #090d16;
+    color: #f1f5f9;
   }
 
   body {
-    @apply antialiased text-slate-100;
+    @apply antialiased text-slate-100 bg-background selection:bg-cyan-500/25 selection:text-cyan-200 font-sans min-h-screen;
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(14, 165, 233, 0.12), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 90% 10%, rgba(16, 185, 129, 0.05), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #090d16;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
   }
 }
 
 /* Custom component classes */
 @layer components {
-  .btn-primary {
-    @apply px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-semibold rounded-xl shadow-lg hover:from-primary-600 hover:to-primary-700 transition-all duration-300 transform hover:scale-105;
-  }
-
-  .btn-secondary {
-    @apply px-6 py-3 bg-slate-700/50 backdrop-blur-sm text-white font-semibold rounded-xl border border-slate-600 hover:bg-slate-600/50 transition-all duration-300;
-  }
-
-  .card {
-    @apply bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50 shadow-xl;
-  }
-
-  .input-field {
-    @apply w-full px-4 py-3 bg-slate-700/50 backdrop-blur-sm border border-slate-600 rounded-xl text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300;
+  .glass-panel {
+    @apply bg-surface/75 backdrop-blur-xl border border-white/[0.08] shadow-card;
   }
 
   .glass-card {
-    @apply bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl;
+    @apply bg-surface-elevated/70 backdrop-blur-md rounded-2xl border border-white/[0.08] shadow-card hover:border-cyan-500/30 transition-all duration-200;
+  }
+
+  .card {
+    @apply bg-surface-elevated/80 rounded-2xl border border-white/[0.08] shadow-card;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 shadow-glow-cyan shadow-lg active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none disabled:shadow-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm text-slate-200 bg-surface-elevated hover:bg-surface-hover border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium text-sm text-slate-300 hover:text-white hover:bg-white/5 active:scale-[0.98] transition-all duration-150;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-surface-elevated/90 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 transition-all duration-150 text-sm;
   }
 }
 
 /* Custom utility classes */
 @layer utilities {
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-accent-400;
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-cyan-200 to-sky-400;
   }
 
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
+  .gradient-text-accent {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-emerald-300 to-teal-400;
   }
 
-  @keyframes float {
-
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-
-    50% {
-      transform: translateY(-20px);
-    }
-  }
-
-  /* Line clamp utilities for text truncation */
-  .line-clamp-1 {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .line-clamp-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  /* Aspect ratio utilities */
-  .aspect-video {
-    aspect-ratio: 16 / 9;
-  }
-
-  .aspect-square {
-    aspect-ratio: 1 / 1;
+  .font-numbers {
+    font-variant-numeric: tabular-nums;
   }
 }

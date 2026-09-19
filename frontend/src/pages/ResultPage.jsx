@@ -1,14 +1,36 @@
 /**
  * ResultPage Component
- * Displays skill gap analysis results
+ * Intelligence report showcasing skill match score, gap analysis, and roadmap trigger
  */
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import {
+    ScanSearch,
+    Map,
+    CheckCircle2,
+    AlertCircle,
+    Layers,
+    Sparkles,
+    FileText,
+    ArrowRight,
+    Compass,
+    TrendingUp,
+    FolderSearch,
+    ExternalLink
+} from 'lucide-react'
 import { useAnalysis } from '../hooks/useAnalysis'
 import { useRoadmap } from '../hooks/useRoadmap'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
+import Badge from '../components/ui/Badge'
+import MatchScore from '../components/ui/MatchScore'
+import SkillBadge from '../components/ui/SkillBadge'
+import Loading from '../components/ui/Loading'
+import ErrorState from '../components/ui/ErrorState'
+import { toast } from 'sonner'
 
 function ResultPage() {
     const { id } = useParams()
@@ -28,29 +50,27 @@ function ResultPage() {
         setRoadmapError(null)
         try {
             const response = await generateRoadmap(id)
-            // Handle both response.roadmap._id and response.roadmap.id
             const roadmapId = response?.roadmap?._id || response?.roadmap?.id || response?._id
             if (roadmapId) {
+                toast.success('Learning roadmap synthesized!')
                 navigate(`/roadmap/${roadmapId}`)
             } else {
-                setRoadmapError('Roadmap was generated but no ID was returned')
-                console.error('Response structure:', response)
+                setRoadmapError('Roadmap was generated but no ID was returned from server.')
+                toast.error('Roadmap generated without an ID.')
             }
         } catch (err) {
-            console.error('Failed to generate roadmap:', err)
-            setRoadmapError(err.message || 'Failed to generate roadmap. Please try again.')
+            const msg = err.message || 'Failed to generate roadmap. Please try again.'
+            setRoadmapError(msg)
+            toast.error(msg)
         }
     }
 
     if (loading) {
         return (
-            <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+            <div className="min-h-screen flex flex-col bg-background text-slate-100">
                 <Navbar />
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="animate-spin w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                        <p className="text-slate-400">Loading analysis results...</p>
-                    </div>
+                <main className="flex-1 flex items-center justify-center p-6">
+                    <Loading size="lg" text="Retrieving career analysis results..." />
                 </main>
                 <Footer />
             </div>
@@ -59,239 +79,334 @@ function ResultPage() {
 
     if (error || !analysis) {
         return (
-            <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+            <div className="min-h-screen flex flex-col bg-background text-slate-100">
                 <Navbar />
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="text-center card p-8 max-w-md">
-                        <div className="text-6xl mb-4">❌</div>
-                        <h2 className="text-2xl font-bold mb-2">Analysis Not Found</h2>
-                        <p className="text-slate-400 mb-6">{error || 'The analysis you requested could not be found.'}</p>
-                        <Link to="/upload" className="btn-primary">
-                            Upload New Resume
-                        </Link>
-                    </div>
+                <main className="flex-1 flex items-center justify-center p-6">
+                    <ErrorState
+                        title="Analysis Report Not Found"
+                        message={error || 'The requested resume analysis could not be located.'}
+                        secondaryAction={
+                            <Link to="/upload">
+                                <Button size="sm" icon={ScanSearch}>
+                                    Upload New Resume
+                                </Button>
+                            </Link>
+                        }
+                    />
                 </main>
                 <Footer />
             </div>
         )
     }
 
-    const matchScore = analysis.overallMatchScore || analysis.matchScore || 0
+    const matchScore = analysis.overallMatchScore ?? analysis.matchScore ?? 0
     const matchedSkills = analysis.matchedSkills || []
     const gapSkills = analysis.gapSkills || []
-    const skillsExtracted = analysis.extractedSkills || []
+    const extractedSkills = analysis.extractedSkills || []
+    const recommendations = analysis.recommendations || []
+    const roleTitle = analysis.targetRoleLabel || (analysis.targetRole ? analysis.targetRole.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Target Role')
+
+    // Group skills by category if available
+    const categoryGroups = {}
+    matchedSkills.forEach(s => {
+        const cat = typeof s === 'object' && s.category ? s.category : 'General'
+        if (!categoryGroups[cat]) categoryGroups[cat] = { matched: [], gaps: [] }
+        categoryGroups[cat].matched.push(typeof s === 'string' ? s : s.name)
+    })
+    gapSkills.forEach(s => {
+        const cat = typeof s === 'object' && s.category ? s.category : 'General'
+        if (!categoryGroups[cat]) categoryGroups[cat] = { matched: [], gaps: [] }
+        categoryGroups[cat].gaps.push(typeof s === 'string' ? s : s.name)
+    })
+
+    const tabs = [
+        { id: 'overview', label: 'Overview', count: null },
+        { id: 'matched', label: 'Matched Skills', count: matchedSkills.length },
+        { id: 'gaps', label: 'Skill Gaps', count: gapSkills.length },
+        { id: 'extracted', label: 'All Extracted', count: extractedSkills.length },
+    ]
 
     return (
-        <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+        <div className="min-h-screen flex flex-col bg-background text-slate-100">
             <Navbar />
 
-            <main className="flex-1 container mx-auto px-6 py-12">
-                {/* Header with Score */}
-                <div className="text-center mb-12">
-                    <h1 className="text-4xl font-bold mb-6 gradient-text">
-                        Analysis Results
-                    </h1>
-
-                    <div className="inline-flex items-center justify-center p-8 bg-slate-800/50 rounded-2xl border border-slate-700">
-                        <div className="relative w-40 h-40">
-                            {/* Circular Progress */}
-                            <svg className="w-full h-full transform -rotate-90">
-                                <circle
-                                    cx="80" cy="80" r="70"
-                                    stroke="currentColor"
-                                    strokeWidth="12"
-                                    fill="none"
-                                    className="text-slate-700"
-                                />
-                                <circle
-                                    cx="80" cy="80" r="70"
-                                    stroke="url(#scoreGradient)"
-                                    strokeWidth="12"
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeDasharray={440}
-                                    strokeDashoffset={440 - (440 * matchScore) / 100}
-                                    className="transition-all duration-1000"
-                                />
-                                <defs>
-                                    <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stopColor="#06b6d4" />
-                                        <stop offset="100%" stopColor="#8b5cf6" />
-                                    </linearGradient>
-                                </defs>
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-4xl font-bold">{matchScore}%</span>
-                                <span className="text-sm text-slate-400">Match</span>
-                            </div>
+            <main className="flex-1 max-w-6xl mx-auto px-4 sm:px-6 py-10 w-full space-y-8">
+                {/* Hero Card with Match Score */}
+                <div className="p-6 sm:p-10 rounded-3xl bg-surface-elevated/90 border border-white/10 shadow-card">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                        {/* Radial Gauge */}
+                        <div className="lg:col-span-4 flex justify-center">
+                            <MatchScore
+                                score={matchScore}
+                                size={160}
+                                strokeWidth={12}
+                                subtitle={`${matchScore}% Role Match`}
+                            />
                         </div>
 
-                        <div className="ml-8 text-left">
-                            <p className="text-lg text-slate-300 mb-2">
-                                Target: <span className="font-semibold text-white">{analysis.targetRole?.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                            </p>
-                            <p className="text-slate-400">
-                                {matchedSkills.length} matched • {gapSkills.length} gaps identified
-                            </p>
+                        {/* Summary & Meta */}
+                        <div className="lg:col-span-8 space-y-4 text-center lg:text-left">
+                            <div className="space-y-1">
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-xs font-medium">
+                                    <Compass className="w-3.5 h-3.5" />
+                                    <span>Benchmark: {roleTitle}</span>
+                                </div>
+                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                                    Analysis & Competency Assessment
+                                </h1>
+                                <p className="text-xs sm:text-sm text-slate-400">
+                                    Document: <span className="text-slate-200">{analysis.resumeFileName || 'Resume.pdf'}</span>
+                                    {analysis.createdAt && (
+                                        <span> • Analyzed on {new Date(analysis.createdAt).toLocaleDateString()}</span>
+                                    )}
+                                </p>
+                            </div>
+
+                            {/* Key Stats Bar */}
+                            <div className="grid grid-cols-3 gap-3 pt-2 max-w-lg mx-auto lg:mx-0">
+                                <div className="p-3.5 rounded-2xl bg-surface-overlay border border-white/5 text-center lg:text-left">
+                                    <div className="text-xs text-slate-400">Matched</div>
+                                    <div className="text-xl font-bold text-emerald-400 font-numbers">{matchedSkills.length}</div>
+                                </div>
+                                <div className="p-3.5 rounded-2xl bg-surface-overlay border border-white/5 text-center lg:text-left">
+                                    <div className="text-xs text-slate-400">Gaps</div>
+                                    <div className="text-xl font-bold text-amber-400 font-numbers">{gapSkills.length}</div>
+                                </div>
+                                <div className="p-3.5 rounded-2xl bg-surface-overlay border border-white/5 text-center lg:text-left">
+                                    <div className="text-xs text-slate-400">Extracted</div>
+                                    <div className="text-xl font-bold text-cyan-400 font-numbers">{extractedSkills.length}</div>
+                                </div>
+                            </div>
+
+                            {/* Action CTA */}
+                            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+                                <Button
+                                    variant="primary"
+                                    onClick={handleGenerateRoadmap}
+                                    loading={generating}
+                                    loadingText="Synthesizing Roadmap..."
+                                    icon={Map}
+                                    disabled={generating}
+                                >
+                                    Generate Learning Roadmap
+                                </Button>
+                                <Link to="/upload">
+                                    <Button variant="secondary" icon={ScanSearch}>
+                                        New Analysis
+                                    </Button>
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex justify-center mb-8">
-                    <div className="inline-flex bg-slate-800/50 rounded-lg p-1">
-                        {['overview', 'matched', 'gaps', 'extracted'].map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`
-                                    px-6 py-2 rounded-lg font-medium transition-all capitalize
-                                    ${activeTab === tab
-                                        ? 'bg-cyan-500 text-white'
-                                        : 'text-slate-400 hover:text-white'
-                                    }
-                                `}
-                            >
-                                {tab}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Tab Content */}
-                <div className="max-w-4xl mx-auto">
-                    {/* Overview Tab */}
-                    {activeTab === 'overview' && (
-                        <div className="grid md:grid-cols-3 gap-6">
-                            <div className="card p-6 text-center">
-                                <div className="text-4xl font-bold text-green-400 mb-2">{matchedSkills.length}</div>
-                                <div className="text-slate-400">Skills Matched</div>
-                            </div>
-                            <div className="card p-6 text-center">
-                                <div className="text-4xl font-bold text-amber-400 mb-2">{gapSkills.length}</div>
-                                <div className="text-slate-400">Skill Gaps</div>
-                            </div>
-                            <div className="card p-6 text-center">
-                                <div className="text-4xl font-bold text-cyan-400 mb-2">{skillsExtracted.length}</div>
-                                <div className="text-slate-400">Skills Found</div>
-                            </div>
-
-                            <div className="md:col-span-3 card p-6">
-                                <h3 className="text-xl font-semibold mb-4">💡 Recommendations</h3>
-                                {analysis.recommendations?.length > 0 ? (
-                                    <ul className="space-y-3">
-                                        {analysis.recommendations.slice(0, 5).map((rec, i) => (
-                                            <li key={i} className="flex items-start">
-                                                <span className="text-cyan-400 mr-3">→</span>
-                                                <span className="text-slate-300">
-                                                    {typeof rec === 'string' ? rec : rec.reason || `Learn ${rec.skill}`}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="text-slate-400">Great job! Your skills match well with the target role.</p>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Matched Skills Tab */}
-                    {activeTab === 'matched' && (
-                        <div className="card p-6">
-                            <h3 className="text-xl font-semibold mb-6 flex items-center">
-                                <span className="text-2xl mr-3">✅</span>
-                                Skills You Have ({matchedSkills.length})
-                            </h3>
-                            {matchedSkills.length > 0 ? (
-                                <div className="flex flex-wrap gap-3">
-                                    {matchedSkills.map((skill, i) => (
-                                        <span key={i} className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg border border-green-500/30">
-                                            {typeof skill === 'string' ? skill : skill.name}
-                                        </span>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-slate-400">No matching skills found for this role.</p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Gap Skills Tab */}
-                    {activeTab === 'gaps' && (
-                        <div className="card p-6">
-                            <h3 className="text-xl font-semibold mb-6 flex items-center">
-                                <span className="text-2xl mr-3">🎯</span>
-                                Skills to Learn ({gapSkills.length})
-                            </h3>
-                            {gapSkills.length > 0 ? (
-                                <div className="flex flex-wrap gap-3">
-                                    {gapSkills.map((skill, i) => (
-                                        <span key={i} className="px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg border border-amber-500/30">
-                                            {typeof skill === 'string' ? skill : skill.name}
-                                        </span>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-slate-400">No skill gaps identified. You're ready for this role!</p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Extracted Skills Tab */}
-                    {activeTab === 'extracted' && (
-                        <div className="card p-6">
-                            <h3 className="text-xl font-semibold mb-6 flex items-center">
-                                <span className="text-2xl mr-3">📋</span>
-                                All Extracted Skills ({skillsExtracted.length})
-                            </h3>
-                            {skillsExtracted.length > 0 ? (
-                                <div className="flex flex-wrap gap-3">
-                                    {skillsExtracted.map((skill, i) => (
-                                        <span key={i} className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg">
-                                            {typeof skill === 'string' ? skill : skill.name}
-                                        </span>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-slate-400">No skills were extracted from your resume.</p>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Action Buttons */}
-                {/* Error Display */}
                 {roadmapError && (
-                    <div className="max-w-2xl mx-auto mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl">
-                        <p className="text-red-400 text-center">
-                            ⚠️ {roadmapError}
-                        </p>
+                    <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-3">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                        <span>{roadmapError}</span>
                     </div>
                 )}
 
-                <div className="flex justify-center gap-4 mt-12">
-                    <Link to="/upload" className="btn-secondary px-8 py-3">
-                        📄 New Analysis
-                    </Link>
-                    <button
-                        onClick={handleGenerateRoadmap}
-                        disabled={generating || gapSkills.length === 0}
-                        className="btn-primary px-8 py-3 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                    >
-                        {generating ? (
-                            <>
-                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Generating...
-                            </>
-                        ) : (
-                            '🗺️ Generate Learning Roadmap'
-                        )}
-                    </button>
+                {/* Tabs Navigation */}
+                <div className="flex items-center justify-center sm:justify-start border-b border-white/10 pb-px gap-2 overflow-x-auto">
+                    {tabs.map((tab) => {
+                        const isCurrent = activeTab === tab.id
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 flex items-center gap-2 select-none shrink-0 ${
+                                    isCurrent
+                                        ? 'bg-white/10 text-white shadow-sm border border-white/10'
+                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                }`}
+                            >
+                                <span>{tab.label}</span>
+                                {tab.count !== null && (
+                                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                                        isCurrent ? 'bg-cyan-500/20 text-cyan-300' : 'bg-surface-overlay text-slate-500'
+                                    }`}>
+                                        {tab.count}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
                 </div>
+
+                {/* Tab 1: Overview */}
+                {activeTab === 'overview' && (
+                    <div className="space-y-6">
+                        {/* Recommendations */}
+                        <div className="p-6 sm:p-8 rounded-3xl bg-surface-elevated border border-white/10 space-y-4">
+                            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-cyan-400" />
+                                Priority Recommendations
+                            </h3>
+                            {recommendations.length > 0 ? (
+                                <div className="space-y-3">
+                                    {recommendations.map((rec, i) => {
+                                        const skillName = typeof rec === 'string' ? rec : rec.skill
+                                        const reason = typeof rec === 'string' ? null : rec.reason
+                                        const priority = typeof rec === 'string' ? 'medium' : rec.priority || 'medium'
+                                        return (
+                                            <div
+                                                key={i}
+                                                className="p-4 rounded-2xl bg-surface-overlay/80 border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                                            >
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-semibold text-white">{skillName}</span>
+                                                        <Badge
+                                                            variant={priority === 'high' ? 'destructive' : priority === 'medium' ? 'warning' : 'info'}
+                                                            size="sm"
+                                                        >
+                                                            {priority} priority
+                                                        </Badge>
+                                                    </div>
+                                                    {reason && (
+                                                        <p className="text-xs text-slate-400">{reason}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-slate-400">
+                                    Your skills strongly align with this target role. Review your roadmaps to refine advanced proficiencies.
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Category Matrix */}
+                        {Object.keys(categoryGroups).length > 0 && (
+                            <div className="p-6 sm:p-8 rounded-3xl bg-surface-elevated border border-white/10 space-y-4">
+                                <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                                    <Layers className="w-4 h-4 text-emerald-400" />
+                                    Categorized Skill Alignment
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {Object.entries(categoryGroups).map(([cat, data]) => (
+                                        <div key={cat} className="p-4 rounded-2xl bg-surface-overlay/60 border border-white/5 space-y-3">
+                                            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                                <span className="text-xs font-semibold text-slate-200 capitalize">{cat.replace('_', ' ')}</span>
+                                                <span className="text-[11px] text-slate-400 font-numbers">
+                                                    {data.matched.length} matched / {data.gaps.length} gaps
+                                                </span>
+                                            </div>
+                                            {data.matched.length > 0 && (
+                                                <div>
+                                                    <span className="text-[11px] text-slate-400 font-medium block mb-1.5">Matched:</span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {data.matched.map(s => <SkillBadge key={s} skill={s} type="matched" />)}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {data.gaps.length > 0 && (
+                                                <div className="pt-1">
+                                                    <span className="text-[11px] text-slate-400 font-medium block mb-1.5">Gaps to develop:</span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {data.gaps.map(s => <SkillBadge key={s} skill={s} type="gap" />)}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Tab 2: Matched Skills */}
+                {activeTab === 'matched' && (
+                    <div className="p-6 sm:p-8 rounded-3xl bg-surface-elevated border border-white/10 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                Skills You Already Possess ({matchedSkills.length})
+                            </h3>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                            These competencies were detected in your resume and meet standard requirements for {roleTitle}.
+                        </p>
+                        {matchedSkills.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                {matchedSkills.map((skill, i) => (
+                                    <SkillBadge
+                                        key={i}
+                                        skill={skill}
+                                        type="matched"
+                                        showLevel={true}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-slate-500 py-6 text-center">No matching skills detected for this specific target role.</p>
+                        )}
+                    </div>
+                )}
+
+                {/* Tab 3: Skill Gaps */}
+                {activeTab === 'gaps' && (
+                    <div className="p-6 sm:p-8 rounded-3xl bg-surface-elevated border border-white/10 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-amber-400" />
+                                Target Competency Gaps ({gapSkills.length})
+                            </h3>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                            These skills are required for {roleTitle} but were not identified in your resume. Prioritize these in your learning roadmap.
+                        </p>
+                        {gapSkills.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                {gapSkills.map((skill, i) => (
+                                    <SkillBadge
+                                        key={i}
+                                        skill={skill}
+                                        type="gap"
+                                        showLevel={true}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-8 text-center space-y-2">
+                                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
+                                <h4 className="text-sm font-semibold text-white">Full Role Alignment!</h4>
+                                <p className="text-xs text-slate-400">No competency gaps were identified for this role.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Tab 4: All Extracted */}
+                {activeTab === 'extracted' && (
+                    <div className="p-6 sm:p-8 rounded-3xl bg-surface-elevated border border-white/10 space-y-4">
+                        <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-cyan-400" />
+                            All Extracted Resume Skills ({extractedSkills.length})
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Complete technical inventory parsed from your resume across all domains.
+                        </p>
+                        {extractedSkills.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                {extractedSkills.map((skill, i) => (
+                                    <SkillBadge
+                                        key={i}
+                                        skill={skill}
+                                        type="extracted"
+                                        showLevel={true}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-slate-500 py-6 text-center">No skills were extracted from the document.</p>
+                        )}
+                    </div>
+                )}
             </main>
 
             <Footer />

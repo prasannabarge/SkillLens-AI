@@ -1,13 +1,17 @@
 /**
  * LoginPage Component
- * User login with backend authentication
+ * Clean, secure authentication with backend integration
  */
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Mail, Lock, Eye, EyeOff, LogIn, ArrowRight, AlertCircle } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+import { toast } from 'sonner'
 
 function LoginPage() {
     const navigate = useNavigate()
@@ -18,6 +22,7 @@ function LoginPage() {
         email: '',
         password: '',
     })
+    const [showPassword, setShowPassword] = useState(false)
     const [formError, setFormError] = useState('')
 
     const from = location.state?.from?.pathname || '/dashboard'
@@ -33,111 +38,123 @@ function LoginPage() {
         e.preventDefault()
         setFormError('')
 
-        // Basic validation
         if (!formData.email || !formData.password) {
-            setFormError('Please fill in all fields')
+            setFormError('Please enter your email and password')
             return
         }
 
         try {
             await login(formData.email, formData.password)
+            toast.success('Signed in successfully')
             navigate(from, { replace: true })
         } catch (err) {
-            setFormError(err.message || 'Login failed. Please check your credentials.')
+            const friendlyMessage = err.status === 401
+                ? 'Invalid email or password. Please check your credentials.'
+                : err.message || 'Unable to sign in. Please try again later.'
+            setFormError(friendlyMessage)
+            toast.error(friendlyMessage)
         }
     }
 
     return (
-        <div className="min-h-screen flex flex-col">
+        <div className="min-h-screen flex flex-col bg-background text-slate-100">
             <Navbar />
 
-            <main className="flex-1 flex items-center justify-center px-6 py-12">
-                <div className="w-full max-w-md">
-                    <div className="card p-8">
-                        <h1 className="text-3xl font-bold text-center mb-2">
-                            Welcome Back
-                        </h1>
-                        <p className="text-slate-400 text-center mb-8">
-                            Sign in to continue to SkillLens
-                        </p>
+            <main className="flex-1 flex items-center justify-center px-4 py-16 relative">
+                {/* Background Ambient */}
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="w-full max-w-md relative z-10">
+                    <div className="bg-surface-elevated/90 border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6">
+                        <div className="text-center space-y-1.5">
+                            <h1 className="text-2xl font-bold tracking-tight text-white">
+                                Welcome Back
+                            </h1>
+                            <p className="text-xs text-slate-400">
+                                Sign in to access your analyses, skills matrix, and roadmaps
+                            </p>
+                        </div>
 
                         {(formError || error) && (
-                            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg mb-6">
-                                {formError || error}
+                            <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2.5 animate-in fade-in duration-150">
+                                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                                <span>{formError || error}</span>
                             </div>
                         )}
 
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                                    Email Address
-                                </label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                                    placeholder="you@example.com"
-                                    autoComplete="email"
-                                />
-                            </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <Input
+                                label="Email Address"
+                                type="email"
+                                name="email"
+                                id="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                icon={Mail}
+                                placeholder="name@domain.com"
+                                autoComplete="email"
+                                required
+                            />
 
-                            <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
-                                    Password
-                                </label>
-                                <input
-                                    type="password"
-                                    id="password"
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                                    placeholder="••••••••"
-                                    autoComplete="current-password"
-                                />
-                            </div>
+                            <Input
+                                label="Password"
+                                type={showPassword ? 'text' : 'password'}
+                                name="password"
+                                id="password"
+                                value={formData.password}
+                                onChange={handleChange}
+                                icon={Lock}
+                                placeholder="••••••••"
+                                autoComplete="current-password"
+                                required
+                                rightSlot={
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="text-slate-400 hover:text-slate-200 transition-colors"
+                                        tabIndex={-1}
+                                    >
+                                        {showPassword ? (
+                                            <EyeOff className="w-4 h-4" />
+                                        ) : (
+                                            <Eye className="w-4 h-4" />
+                                        )}
+                                    </button>
+                                }
+                            />
 
-                            <div className="flex items-center justify-between">
-                                <label className="flex items-center">
+                            <div className="flex items-center justify-between text-xs pt-1">
+                                <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                                        className="w-3.5 h-3.5 rounded border-white/20 bg-surface-overlay text-cyan-500 focus:ring-cyan-500/30 focus:ring-offset-0"
                                     />
-                                    <span className="ml-2 text-sm text-slate-400">Remember me</span>
+                                    <span>Remember session</span>
                                 </label>
-                                <Link to="/forgot-password" className="text-sm text-cyan-400 hover:text-cyan-300">
+                                <span className="text-cyan-400/80 hover:text-cyan-300 transition-colors cursor-pointer" onClick={() => toast.info('Password reset instructions will be sent to registered accounts.')}>
                                     Forgot password?
-                                </Link>
+                                </span>
                             </div>
 
-                            <button
+                            <Button
                                 type="submit"
-                                disabled={loading}
-                                className="w-full btn-primary py-3 flex items-center justify-center"
+                                variant="primary"
+                                size="md"
+                                loading={loading}
+                                loadingText="Signing in..."
+                                icon={LogIn}
+                                className="w-full mt-2"
                             >
-                                {loading ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Signing in...
-                                    </>
-                                ) : (
-                                    'Sign In'
-                                )}
-                            </button>
+                                Sign In
+                            </Button>
                         </form>
 
-                        <p className="mt-8 text-center text-slate-400">
-                            Don't have an account?{' '}
-                            <Link to="/register" className="text-cyan-400 hover:text-cyan-300 font-medium">
-                                Sign up free
+                        <div className="pt-4 border-t border-white/5 text-center text-xs text-slate-400">
+                            Don't have an account yet?{' '}
+                            <Link to="/register" className="text-cyan-400 hover:text-cyan-300 font-medium inline-flex items-center gap-1">
+                                Create account <ArrowRight className="w-3 h-3" />
                             </Link>
-                        </p>
+                        </div>
                     </div>
                 </div>
             </main>

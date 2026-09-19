@@ -1,20 +1,23 @@
-/**
- * Loading Component
- * Loading spinner indicator
- */
+import React from 'react'
+import { Loader2 } from 'lucide-react'
+import { cn } from '../../utils/cn'
 
-function Loading({ size = 'md', className = '' }) {
+export function Loading({
+    size = 'md',
+    text,
+    className = '',
+}) {
     const sizes = {
         sm: 'w-4 h-4',
-        md: 'w-8 h-8',
-        lg: 'w-12 h-12',
+        md: 'w-6 h-6',
+        lg: 'w-10 h-10',
+        xl: 'w-14 h-14',
     }
 
     return (
-        <div className={`flex items-center justify-center ${className}`}>
-            <div
-                className={`${sizes[size]} border-2 border-slate-600 border-t-primary-500 rounded-full animate-spin`}
-            />
+        <div className={cn('flex flex-col items-center justify-center gap-3 p-6 text-slate-400', className)}>
+            <Loader2 className={cn('animate-spin text-cyan-400', sizes[size])} />
+            {text && <p className="text-sm font-medium text-slate-300 animate-pulse">{text}</p>}
         </div>
     )
 }
