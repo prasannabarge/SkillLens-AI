@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import CommandPalette from './components/ui/CommandPalette'
@@ -18,6 +18,7 @@ import UploadPage from './pages/UploadPage'
 import ResultPage from './pages/ResultPage'
 import RoadmapPage from './pages/RoadmapPage'
 import DashboardPage from './pages/DashboardPage'
+import NotFoundPage from './pages/NotFoundPage'
 
 // Global UI Shell Context
 export const ShellContext = createContext({
@@ -30,6 +31,7 @@ export const useShell = () => useContext(ShellContext)
 // Protected Route Component
 function ProtectedRoute({ children }) {
     const { isAuthenticated, loading } = useAuth()
+    const location = useLocation()
 
     if (loading) {
         return (
@@ -43,7 +45,7 @@ function ProtectedRoute({ children }) {
     }
 
     if (!isAuthenticated) {
-        return <Navigate to="/login" replace />
+        return <Navigate to="/login" state={{ from: location }} replace />
     }
 
     return children
@@ -79,8 +81,8 @@ function AppRoutes() {
                 </ProtectedRoute>
             } />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 404 Not Found Fallback */}
+            <Route path="*" element={<NotFoundPage />} />
         </Routes>
     )
 }

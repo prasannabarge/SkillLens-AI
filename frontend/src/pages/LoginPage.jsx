@@ -1,22 +1,24 @@
 /**
  * LoginPage Component
- * Clean, secure authentication with backend integration
+ * Clean, secure authentication with backend integration,
+ * safe return navigation, and open redirect protection.
  */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, LogIn, ArrowRight, AlertCircle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, LogIn, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import { getSafeRedirectUrl, handleAuthCancellation } from '../utils/navigation'
 import { toast } from 'sonner'
 
 function LoginPage() {
     const navigate = useNavigate()
     const location = useLocation()
-    const { login, loading, error, clearError } = useAuth()
+    const { login, loading, error, clearError, isAuthenticated } = useAuth()
 
     const [formData, setFormData] = useState({
         email: '',
@@ -25,13 +27,25 @@ function LoginPage() {
     const [showPassword, setShowPassword] = useState(false)
     const [formError, setFormError] = useState('')
 
-    const from = location.state?.from?.pathname || '/dashboard'
+    // Safely parse redirect destination against internal route whitelist
+    const safeFrom = getSafeRedirectUrl(location.state?.from, '/dashboard')
+
+    // Redirect already authenticated users away from the login page
+    useEffect(() => {
+        if (!loading && isAuthenticated) {
+            navigate(safeFrom, { replace: true })
+        }
+    }, [isAuthenticated, loading, navigate, safeFrom])
 
     const handleChange = (e) => {
         const { name, value } = e.target
         setFormData(prev => ({ ...prev, [name]: value }))
         setFormError('')
         clearError()
+    }
+
+    const handleCancel = () => {
+        handleAuthCancellation(navigate, location, '/')
     }
 
     const handleSubmit = async (e) => {
@@ -46,7 +60,7 @@ function LoginPage() {
         try {
             await login(formData.email, formData.password)
             toast.success('Signed in successfully')
-            navigate(from, { replace: true })
+            navigate(safeFrom, { replace: true })
         } catch (err) {
             const friendlyMessage = err.status === 401
                 ? 'Invalid email or password. Please check your credentials.'
@@ -65,6 +79,18 @@ function LoginPage() {
                 <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
                 <div className="w-full max-w-md relative z-10">
+                    {/* In-app Back Navigation Link */}
+                    <button
+                        id="btn-login-back"
+                        type="button"
+                        onClick={handleCancel}
+                        className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors group mb-3 select-none"
+                        aria-label="Back to application"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5 text-cyan-400 group-hover:-translate-x-1 transition-transform" />
+                        <span>Back to Application</span>
+                    </button>
+
                     <div className="bg-surface-elevated/90 border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6">
                         <div className="text-center space-y-1.5">
                             <h1 className="text-2xl font-bold tracking-tight text-white">
@@ -136,22 +162,36 @@ function LoginPage() {
                                 </span>
                             </div>
 
-                            <Button
-                                type="submit"
-                                variant="primary"
-                                size="md"
-                                loading={loading}
-                                loadingText="Signing in..."
-                                icon={LogIn}
-                                className="w-full mt-2"
-                            >
-                                Sign In
-                            </Button>
+                            {/* Action Buttons: Cancel and Sign In */}
+                            <div className="flex items-center gap-3 pt-2">
+                                <Button
+                                    id="btn-login-cancel"
+                                    type="button"
+                                    variant="secondary"
+                                    size="md"
+                                    onClick={handleCancel}
+                                    className="w-1/3"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    id="btn-login-submit"
+                                    type="submit"
+                                    variant="primary"
+                                    size="md"
+                                    loading={loading}
+                                    loadingText="Signing in..."
+                                    icon={LogIn}
+                                    className="w-2/3"
+                                >
+                                    Sign In
+                                </Button>
+                            </div>
                         </form>
 
                         <div className="pt-4 border-t border-white/5 text-center text-xs text-slate-400">
                             Don't have an account yet?{' '}
-                            <Link to="/register" className="text-cyan-400 hover:text-cyan-300 font-medium inline-flex items-center gap-1">
+                            <Link to="/register" state={{ from: location.state?.from }} className="text-cyan-400 hover:text-cyan-300 font-medium inline-flex items-center gap-1">
                                 Create account <ArrowRight className="w-3 h-3" />
                             </Link>
                         </div>

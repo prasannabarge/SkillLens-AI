@@ -43,7 +43,7 @@ apiClient.interceptors.response.use(
             localStorage.removeItem('user')
             // Only redirect if not already on auth pages
             if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
-                window.location.href = '/login'
+                window.location.replace('/login')
             }
         }
 
@@ -80,7 +80,7 @@ export const authService = {
     logout: () => {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
-        window.location.href = '/login'
+        window.location.replace('/login')
     },
 
     getProfile: () => apiClient.get('/auth/profile'),
