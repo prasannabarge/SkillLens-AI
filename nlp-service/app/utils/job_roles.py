@@ -152,7 +152,32 @@ JOB_ROLES = {
             {"name": "User Testing", "level": "intermediate", "category": "tools"},
         ]
     },
+    "business-analyst": {
+        "label": "Business Analyst",
+        "skills": [
+            {"name": "Excel", "level": "advanced", "category": "tools"},
+            {"name": "SQL", "level": "advanced", "category": "database"},
+            {"name": "Power BI", "level": "intermediate", "category": "tools"},
+            {"name": "Tableau", "level": "intermediate", "category": "tools"},
+            {"name": "Data Analysis", "level": "advanced", "category": "data_ml"},
+            {"name": "Agile", "level": "intermediate", "category": "tools"},
+            {"name": "Jira", "level": "intermediate", "category": "tools"},
+        ]
+    },
+    "product-analyst": {
+        "label": "Product Analyst",
+        "skills": [
+            {"name": "SQL", "level": "advanced", "category": "database"},
+            {"name": "A/B Testing", "level": "advanced", "category": "tools"},
+            {"name": "Python", "level": "intermediate", "category": "programming"},
+            {"name": "Data Analysis", "level": "advanced", "category": "data_ml"},
+            {"name": "Statistics", "level": "intermediate", "category": "data_ml"},
+            {"name": "Excel", "level": "advanced", "category": "tools"},
+            {"name": "Tableau", "level": "intermediate", "category": "tools"},
+        ]
+    },
 }
+
 
 
 def get_required_skills(role_id: str) -> List[Dict]:

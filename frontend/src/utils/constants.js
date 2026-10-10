@@ -34,7 +34,10 @@ export const JOB_ROLES = [
     { id: 'cloud-architect', label: 'Cloud Architect' },
     { id: 'product-manager', label: 'Product Manager' },
     { id: 'ui-ux-designer', label: 'UI/UX Designer' },
+    { id: 'business-analyst', label: 'Business Analyst' },
+    { id: 'product-analyst', label: 'Product Analyst' },
 ]
+
 
 // Supported file types for resume upload
 export const SUPPORTED_FILE_TYPES = {

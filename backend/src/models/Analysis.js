@@ -28,8 +28,17 @@ const skillSchema = new mongoose.Schema({
         max: 1,
         default: 0.7,
     },
+    canonicalName: String,
+    rawName: String,
+    status: {
+        type: String,
+        enum: ['present', 'partial', 'missing', 'unknown'],
+        default: 'present',
+    },
+    evidence: [String],
     yearsOfExperience: Number,
 }, { _id: false });
+
 
 // Recommendation sub-document schema
 const recommendationSchema = new mongoose.Schema({

@@ -1,106 +1,198 @@
 """
 Skill Matcher
-Matches user skills against required skills using semantic similarity
+Matches user skills and resume evidence against target role skill requirements
+using layered matching (exact, canonical/alias, contextual verification)
+with explainable evidence and conservative gap classification.
 """
 
+import re
 import logging
-from typing import List, Dict
+from typing import List, Dict, Union, Optional, Set, Tuple
+from app.nlp.taxonomy import taxonomy
 
 logger = logging.getLogger(__name__)
 
 
 class SkillMatcher:
-    """Matches skills using exact and fuzzy matching"""
-    
+    """
+    Evidence-first skill matching engine.
+    Ensures that if a skill is present in the resume or an equivalent canonical alias exists,
+    it is NEVER classified as a skill gap.
+    """
+
     def __init__(self):
-        self.model = None
-        # Skill synonyms for fuzzy matching
-        self.synonyms = {
-            "javascript": ["js", "ecmascript", "es6", "es2015"],
-            "typescript": ["ts"],
-            "react": ["react.js", "reactjs"],
-            "vue": ["vue.js", "vuejs"],
-            "angular": ["angularjs", "angular.js"],
-            "node.js": ["nodejs", "node"],
-            "mongodb": ["mongo"],
-            "postgresql": ["postgres", "psql"],
-            "kubernetes": ["k8s"],
-            "amazon web services": ["aws"],
-            "google cloud platform": ["gcp", "google cloud"],
-            "machine learning": ["ml"],
-            "deep learning": ["dl"],
-            "natural language processing": ["nlp"],
-            "continuous integration": ["ci"],
-            "continuous deployment": ["cd"],
-            "ci/cd": ["cicd", "ci cd"],
-        }
-        
-        # Build reverse synonym map
-        self.reverse_synonyms = {}
-        for main_skill, alts in self.synonyms.items():
-            for alt in alts:
-                self.reverse_synonyms[alt] = main_skill
-    
-    def _normalize_skill(self, skill: str) -> str:
-        """Normalize skill name for comparison"""
-        normalized = skill.lower().strip()
-        # Check if it's a synonym
-        if normalized in self.reverse_synonyms:
-            return self.reverse_synonyms[normalized]
-        return normalized
-    
+        self.taxonomy = taxonomy
+        logger.info("SkillMatcher initialized with centralized taxonomy.")
+
     def match_skills(
-        self, 
-        user_skills: List[str], 
-        required_skills: List[str]
+        self,
+        user_skills: List[Union[str, Dict]],
+        required_skills: List[Union[str, Dict]],
+        resume_text: Optional[str] = None
     ) -> Dict:
         """
-        Match user skills against required skills
-        
+        Match user skills against target role required skills.
+
         Args:
-            user_skills: List of user's skills
-            required_skills: List of required skills for the role
-            
+            user_skills: List of extracted skill names or enriched skill dicts
+            required_skills: List of required skill names or skill dicts for the role
+            resume_text: Optional complete resume text for fallback context verification
+
         Returns:
-            Dictionary with matched skills, gaps, and match score
+            Dictionary containing:
+                - matched: List of matched required skill names (backward-compatible)
+                - gaps: List of missing required skill names (backward-compatible)
+                - partial: List of partially matched skill names
+                - score: Match score percentage (0-100)
+                - totalRequired: Count of required skills
+                - totalMatched: Count of matched skills
+                - details: Enriched per-skill assessment including status, confidence, and evidence
         """
-        # Normalize all skills
-        user_normalized = {self._normalize_skill(s) for s in user_skills}
-        required_normalized = {self._normalize_skill(s) for s in required_skills}
-        
-        # Find exact and synonym matches
-        matched = set()
-        for user_skill in user_normalized:
-            if user_skill in required_normalized:
-                matched.add(user_skill)
-        
-        # Find gaps (required but not in user skills)
-        gaps = required_normalized - matched
-        
-        # Calculate match score
-        if len(required_normalized) > 0:
-            score = (len(matched) / len(required_normalized)) * 100
-        else:
-            score = 0
-        
-        # Find original skill names for matched and gaps
-        matched_original = self._get_original_names(matched, required_skills)
-        gaps_original = self._get_original_names(gaps, required_skills)
-        
-        logger.info(f"Skill match: {len(matched)}/{len(required_normalized)} = {score:.1f}%")
-        
+        # 1. Normalize required skills list
+        clean_required: List[Dict] = []
+        for req in required_skills:
+            if isinstance(req, dict):
+                name = req.get("name", "")
+                level = req.get("level", "intermediate")
+                category = req.get("category", "")
+            else:
+                name = str(req)
+                level = "intermediate"
+                category = ""
+
+            canon = self.taxonomy.get_canonical(name)
+            clean_required.append({
+                "original_name": name,
+                "canonical_name": canon,
+                "level": level,
+                "category": category or self.taxonomy.get_category(canon),
+            })
+
+        # 2. Build index of user competencies
+        user_competencies: Dict[str, Dict] = {}
+        for item in user_skills:
+            if isinstance(item, dict):
+                raw = item.get("raw_name") or item.get("name", "")
+                canon = item.get("canonical_name") or self.taxonomy.get_canonical(raw)
+                evidence = item.get("evidence", [])
+                confidence = item.get("confidence", 0.95)
+                level = item.get("level", "intermediate")
+                category = item.get("category") or self.taxonomy.get_category(canon)
+            else:
+                raw = str(item)
+                canon = self.taxonomy.get_canonical(raw)
+                evidence = []
+                confidence = 0.95
+                level = "intermediate"
+                category = self.taxonomy.get_category(canon)
+
+            canon_key = canon.lower()
+            if canon_key not in user_competencies or confidence > user_competencies[canon_key]["confidence"]:
+                user_competencies[canon_key] = {
+                    "canonical_name": canon,
+                    "raw_name": raw,
+                    "confidence": confidence,
+                    "evidence": list(evidence),
+                    "level": level,
+                    "category": category,
+                }
+            elif canon_key in user_competencies and evidence:
+                # Merge evidence
+                for ev in evidence:
+                    if ev not in user_competencies[canon_key]["evidence"]:
+                        user_competencies[canon_key]["evidence"].append(ev)
+
+        # 3. Match each required skill using layered verification
+        matched_original: List[str] = []
+        gaps_original: List[str] = []
+        partial_original: List[str] = []
+        details: Dict[str, Dict] = {}
+
+        for req in clean_required:
+            orig_name = req["original_name"]
+            canon_name = req["canonical_name"]
+            canon_key = canon_name.lower()
+
+            status = "missing"
+            match_via = None
+            evidence = []
+            confidence = 0.0
+            detected_level = req["level"]
+
+            # ----------------------------------------------------
+            # Layer 1: Canonical / Alias match in user competencies
+            # ----------------------------------------------------
+            if canon_key in user_competencies:
+                comp = user_competencies[canon_key]
+                status = "present"
+                match_via = f"canonical alias '{comp['raw_name']}'"
+                evidence = comp["evidence"]
+                confidence = comp["confidence"]
+                detected_level = comp["level"]
+
+            # ----------------------------------------------------
+            # Layer 2: Direct resume text verification
+            # (Fallback in case extractor missed an inline mention)
+            # ----------------------------------------------------
+            if status == "missing" and resume_text:
+                found_mention, found_alias, found_evidence = self._find_in_text(canon_name, resume_text)
+                if found_mention:
+                    status = "present"
+                    match_via = f"direct resume evidence '{found_alias}'"
+                    evidence = [found_evidence] if found_evidence else []
+                    confidence = 0.92
+                    detected_level = "intermediate"
+
+            # ----------------------------------------------------
+            # Final Classification
+            # ----------------------------------------------------
+            if status == "present":
+                matched_original.append(orig_name)
+                logger.info(f"Skill Match: '{orig_name}' (Canonical: '{canon_name}') -> PRESENT via {match_via}")
+            else:
+                gaps_original.append(orig_name)
+                logger.info(f"Skill Gap:   '{orig_name}' (Canonical: '{canon_name}') -> MISSING (No evidence in resume)")
+
+            details[orig_name] = {
+                "name": orig_name,
+                "canonical_name": canon_name,
+                "status": status,
+                "confidence": confidence,
+                "evidence": evidence,
+                "level": detected_level,
+                "category": req["category"],
+            }
+
+        # 4. Calculate overall match score
+        total_required = len(clean_required)
+        total_matched = len(matched_original)
+        score = round((total_matched / total_required) * 100, 1) if total_required > 0 else 0.0
+
         return {
             "matched": matched_original,
             "gaps": gaps_original,
-            "score": round(score, 1),
-            "totalRequired": len(required_normalized),
-            "totalMatched": len(matched),
+            "partial": partial_original,
+            "score": score,
+            "totalRequired": total_required,
+            "totalMatched": total_matched,
+            "details": details,
         }
-    
-    def _get_original_names(self, normalized_set: set, original_list: List[str]) -> List[str]:
-        """Get original skill names from normalized set"""
-        result = []
-        for original in original_list:
-            if self._normalize_skill(original) in normalized_set:
-                result.append(original)
-        return result
+
+    def _find_in_text(self, canonical_name: str, text: str) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Directly verify if a canonical skill or any of its aliases exists in raw resume text.
+        Returns (found: bool, matched_alias: str, evidence_snippet: str).
+        """
+        aliases = [canonical_name] + self.taxonomy.get_aliases(canonical_name)
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+
+        for alias in aliases:
+            pattern = self.taxonomy._build_boundary_pattern(alias)
+            for line in lines:
+                match = pattern.search(line)
+                if match:
+                    matched_str = match.group(0)
+                    evidence = line[:120].strip()
+                    return True, matched_str, evidence
+
+        return False, None, None

@@ -227,7 +227,63 @@ const JOB_ROLES = {
             { name: 'Terraform', level: 'intermediate' },
         ],
     },
+    'data-analyst': {
+        id: 'data-analyst',
+        label: 'Data Analyst',
+        skills: [
+            { name: 'SQL', level: 'advanced' },
+            { name: 'Excel', level: 'advanced' },
+            { name: 'Python', level: 'intermediate' },
+            { name: 'Pandas', level: 'intermediate' },
+            { name: 'Data Visualization', level: 'advanced' },
+            { name: 'Tableau', level: 'intermediate' },
+            { name: 'Statistics', level: 'intermediate' },
+            { name: 'Power BI', level: 'intermediate' },
+        ],
+    },
+    'business-analyst': {
+        id: 'business-analyst',
+        label: 'Business Analyst',
+        skills: [
+            { name: 'Excel', level: 'advanced' },
+            { name: 'SQL', level: 'advanced' },
+            { name: 'Power BI', level: 'intermediate' },
+            { name: 'Tableau', level: 'intermediate' },
+            { name: 'Data Analysis', level: 'advanced' },
+            { name: 'Agile', level: 'intermediate' },
+            { name: 'Jira', level: 'intermediate' },
+        ],
+    },
+    'product-analyst': {
+        id: 'product-analyst',
+        label: 'Product Analyst',
+        skills: [
+            { name: 'SQL', level: 'advanced' },
+            { name: 'A/B Testing', level: 'advanced' },
+            { name: 'Python', level: 'intermediate' },
+            { name: 'Data Analysis', level: 'advanced' },
+            { name: 'Statistics', level: 'intermediate' },
+            { name: 'Excel', level: 'advanced' },
+            { name: 'Tableau', level: 'intermediate' },
+        ],
+    },
+    'ui-ux-designer': {
+        id: 'ui-ux-designer',
+        label: 'UI/UX Designer',
+        skills: [
+            { name: 'Figma', level: 'advanced' },
+            { name: 'UI Design', level: 'advanced' },
+            { name: 'UX Research', level: 'advanced' },
+            { name: 'Prototyping', level: 'advanced' },
+            { name: 'Adobe XD', level: 'intermediate' },
+            { name: 'CSS', level: 'intermediate' },
+            { name: 'HTML', level: 'intermediate' },
+            { name: 'Design Systems', level: 'intermediate' },
+            { name: 'User Testing', level: 'intermediate' },
+        ],
+    },
 };
+
 
 /**
  * Extract skills from text using pattern matching
@@ -297,13 +353,16 @@ const SKILL_NAMES = {
     'gcp': 'Google Cloud',
     'google cloud': 'Google Cloud',
     'git': 'Git',
-    'github': 'Git',
-    'gitlab': 'Git',
+    'github': 'GitHub',
+    'gitlab': 'GitLab',
     'ci/cd': 'CI/CD',
     'jenkins': 'CI/CD',
     'circleci': 'CI/CD',
-    'rest api': 'REST APIs',
-    'restful': 'REST APIs',
+    'rest api': 'REST API',
+    'rest apis': 'REST API',
+    'restful': 'REST API',
+    'restful api': 'REST API',
+    'restful apis': 'REST API',
     'graphql': 'GraphQL',
     'machine learning': 'Machine Learning',
     'ml': 'Machine Learning',
@@ -313,7 +372,23 @@ const SKILL_NAMES = {
     'numpy': 'NumPy',
     'agile': 'Agile',
     'scrum': 'Scrum',
+    'excel': 'Excel',
+    'microsoft excel': 'Excel',
+    'ms excel': 'Excel',
+    'power bi': 'Power BI',
+    'microsoft power bi': 'Power BI',
+    'tableau': 'Tableau',
 };
+
+/**
+ * Canonical skill normalization for Node.js fallback
+ */
+function getCanonicalSkill(name) {
+    if (!name) return '';
+    const lower = name.toLowerCase().trim();
+    return SKILL_NAMES[lower] || name.trim();
+}
+
 
 /**
  * Generate fallback analysis when NLP service is unavailable
@@ -342,14 +417,25 @@ async function generateFallbackAnalysis(filePath, targetRole) {
     const gaps = [];
 
     requiredSkills.forEach(reqSkill => {
+        const reqCanon = getCanonicalSkill(reqSkill.name);
         const found = extractedSkills.find(
-            s => s.name.toLowerCase() === reqSkill.name.toLowerCase()
+            s => getCanonicalSkill(s.name) === reqCanon
         );
 
         if (found) {
-            matched.push({ ...reqSkill, confidence: 0.8 });
+            matched.push({
+                ...reqSkill,
+                canonicalName: reqCanon,
+                confidence: 0.95,
+                status: 'present',
+            });
         } else {
-            gaps.push(reqSkill);
+            gaps.push({
+                ...reqSkill,
+                canonicalName: reqCanon,
+                confidence: 0,
+                status: 'missing',
+            });
         }
     });
 
@@ -382,7 +468,7 @@ function extractSkillsFromText(text) {
         const matches = text.match(pattern);
         if (matches) {
             matches.forEach(match => {
-                const normalized = SKILL_NAMES[match.toLowerCase()];
+                const normalized = getCanonicalSkill(match);
                 if (normalized) {
                     skills.add(normalized);
                 }
@@ -392,8 +478,10 @@ function extractSkillsFromText(text) {
 
     return Array.from(skills).map(name => ({
         name,
+        canonicalName: name,
         level: 'intermediate',
-        confidence: 0.7,
+        confidence: 0.9,
+        status: 'present',
     }));
 }
 
@@ -408,13 +496,19 @@ function generateFallbackMatching(skills, targetRole) {
     const gaps = [];
 
     requiredSkills.forEach(reqSkill => {
-        const found = skills.find(s => s.toLowerCase() === reqSkill.name.toLowerCase());
+        const reqCanon = getCanonicalSkill(reqSkill.name);
+        const found = skills.find(s => {
+            const raw = typeof s === 'string' ? s : (s.name || '');
+            return getCanonicalSkill(raw) === reqCanon;
+        });
+
         if (found) {
             matched.push(reqSkill);
         } else {
             gaps.push(reqSkill);
         }
     });
+
 
     const matchScore = requiredSkills.length > 0
         ? Math.round((matched.length / requiredSkills.length) * 100)

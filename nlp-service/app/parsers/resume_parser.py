@@ -124,16 +124,37 @@ class ResumeParser:
             return None
     
     def _clean_text(self, text: str) -> str:
-        """Clean and normalize extracted text"""
+        """
+        Clean and normalize extracted text while preserving section boundaries,
+        structural line breaks, and technical symbols (/, &, +, #, ., -, :, ;).
+        """
         import re
+
+        if not text:
+            return ""
+
+        # Normalize line breaks
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+        # Replace non-standard bullets with standard bullet
+        text = re.sub(r'[\u2022\u2023\u25E6\u2043\u2219\u25AA\u25AB\u25CF\u25CB\u25A0\u25A1]', ' • ', text)
+
+        # Replace non-breaking spaces and control characters
+        text = re.sub(r'[\xa0\t\f\v]', ' ', text)
+
+        # Remove unprintable / non-ascii strange control characters, but keep printable unicode and punctuation
+        text = re.sub(r'[^\x20-\x7E\n•]', ' ', text)
+
+        # Normalize multiple spaces on the same line without destroying newlines
+        lines = [re.sub(r' +', ' ', line).strip() for line in text.split('\n')]
         
-        # Remove excessive whitespace
-        text = re.sub(r'\s+', ' ', text)
-        
-        # Remove special characters but keep punctuation
-        text = re.sub(r'[^\w\s\.\,\-\+\#\@\(\)]', ' ', text)
-        
-        # Normalize whitespace again
-        text = ' '.join(text.split())
-        
-        return text.strip()
+        # Remove consecutive blank lines
+        clean_lines = []
+        for line in lines:
+            if line:
+                clean_lines.append(line)
+            elif clean_lines and clean_lines[-1] != "":
+                clean_lines.append("")
+
+        return '\n'.join(clean_lines).strip()
+

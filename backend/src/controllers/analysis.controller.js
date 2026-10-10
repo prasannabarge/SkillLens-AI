@@ -88,26 +88,42 @@ exports.analyzeResume = async (req, res, next) => {
             extractedText: nlpResult.extracted_text,
             extractedSkills: nlpResult.extracted_skills?.map(skill => ({
                 name: skill.name || skill,
+                canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
+                rawName: skill.raw_name || skill.rawName,
                 level: skill.level || 'intermediate',
-                confidence: skill.confidence || 0.7,
+                confidence: skill.confidence || 0.9,
                 category: skill.category || 'other',
+                status: skill.status || 'present',
+                evidence: skill.evidence || [],
             })) || [],
             requiredSkills: nlpResult.required_skills?.map(skill => ({
                 name: skill.name || skill,
+                canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
                 level: skill.level || 'intermediate',
                 category: skill.category || 'other',
             })) || [],
             matchedSkills: nlpResult.matched_skills?.map(skill => ({
                 name: skill.name || skill,
+                canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
                 level: skill.level || 'intermediate',
+                confidence: skill.confidence || 0.95,
+                category: skill.category || 'other',
+                status: 'present',
+                evidence: skill.evidence || [],
             })) || [],
             gapSkills: nlpResult.gap_skills?.map(skill => ({
                 name: skill.name || skill,
+                canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
                 level: skill.level || 'beginner',
+                confidence: 0,
+                category: skill.category || 'other',
+                status: 'missing',
+                evidence: [],
             })) || [],
             matchScore: nlpResult.match_score || 0,
             recommendations: nlpResult.recommendations || [],
         });
+
 
         // Generate summary
         analysis.generateSummary();
