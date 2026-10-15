@@ -22,6 +22,36 @@ const validateEnv = () => {
 // Run validation
 validateEnv();
 
+// Database resolution helper: ensures canonical database name 'skillLens'
+const resolveDbName = () => {
+    const envDb = process.env.DB_NAME;
+    if (envDb) {
+        if (envDb.toLowerCase() === 'skilllens') {
+            return 'skillLens';
+        }
+        return envDb;
+    }
+    const uri = process.env.MONGODB_URI;
+    if (uri) {
+        try {
+            const match = uri.match(/(?:\.mongodb\.net|\d{1,5})\/([^?\/]+)/);
+            if (match && match[1]) {
+                const uriDb = match[1].trim();
+                if (uriDb.toLowerCase() === 'skilllens') {
+                    return 'skillLens';
+                }
+                return uriDb;
+            }
+        } catch (_) {}
+    }
+    return 'skillLens';
+};
+
+const sanitizeMongoUri = (uri) => {
+    if (!uri) return uri;
+    return uri.replace(/\/skilllens(?=[/?]|$)/i, '/skillLens');
+};
+
 const config = {
     // Environment
     env: process.env.NODE_ENV || 'development',
@@ -32,12 +62,15 @@ const config = {
     server: {
         port: parseInt(process.env.PORT, 10) || 5000,
         host: process.env.HOST || 'localhost',
+        trustProxy: process.env.TRUST_PROXY
+            ? (Number.isInteger(parseInt(process.env.TRUST_PROXY, 10)) ? parseInt(process.env.TRUST_PROXY, 10) : process.env.TRUST_PROXY === 'true' ? 1 : false)
+            : 1,
     },
 
     // Database
     database: {
-        uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/skilllens',
-        name: process.env.DB_NAME || 'skilllens',
+        uri: sanitizeMongoUri(process.env.MONGODB_URI) || 'mongodb://localhost:27017/skillLens',
+        name: resolveDbName(),
     },
 
     // JWT Configuration

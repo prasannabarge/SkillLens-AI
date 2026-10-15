@@ -90,6 +90,7 @@ describe('SkillLens Backend & Analysis Pipeline Regression Suite', () => {
             expect([200, 503]).toContain(res.status);
             expect(res.body.service).toBe('skilllens-backend');
             expect(res.body.database).toBeDefined();
+            expect(res.body.database.name).toBe('skillLens');
         });
     });
 

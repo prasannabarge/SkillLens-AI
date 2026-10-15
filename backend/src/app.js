@@ -11,7 +11,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const config = require('./config');
-const { getConnectionStatus } = require('./config/database');
+const { getConnectionStatus, getDatabaseName } = require('./config/database');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -24,6 +24,19 @@ const errorHandler = require('./middleware/errorHandler');
 
 const crypto = require('crypto');
 const app = express();
+
+// ============================================
+// TRUST PROXY CONFIGURATION
+// ============================================
+// Render deployment uses a reverse proxy directly in front of the application.
+// Setting trust proxy to 1 informs Express to trust exactly 1 hop (the immediate Render proxy).
+// This:
+// 1. Correctly sets req.ip to the client IP from the rightmost entry in X-Forwarded-For.
+// 2. Fixes express-rate-limit's ERR_ERL_UNEXPECTED_X_FORWARDED_FOR validation error.
+// 3. Prevents client IP spoofing by refusing to trust forged upstream X-Forwarded-For headers.
+if (config.server.trustProxy !== false) {
+    app.set('trust proxy', config.server.trustProxy);
+}
 
 // ============================================
 // CORRELATION ID
@@ -79,6 +92,8 @@ const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 20, // 20 requests per window
     message: { error: 'Too many authentication attempts, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
 });
 
 // Apply rate limiting
@@ -137,6 +152,7 @@ app.get('/health', (req, res) => {
 // Detailed health check with database status
 app.get('/health/detailed', (req, res) => {
     const dbStatus = getConnectionStatus();
+    const dbName = getDatabaseName();
 
     res.status(dbStatus === 'connected' ? 200 : 503).json({
         status: dbStatus === 'connected' ? 'ok' : 'degraded',
@@ -146,6 +162,7 @@ app.get('/health/detailed', (req, res) => {
         environment: config.env,
         database: {
             status: dbStatus,
+            name: dbName,
         },
         memory: {
             used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',

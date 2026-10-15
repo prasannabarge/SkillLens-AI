@@ -22,7 +22,7 @@ const connectionOptions = {
  * @param {number} delay - Delay between retries in ms
  */
 const connectDB = async (retries = 5, delay = 5000) => {
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/skilllens';
+    const MONGODB_URI = config.database.uri || 'mongodb://localhost:27017/skillLens';
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
@@ -116,6 +116,14 @@ const getConnectionStatus = () => {
 };
 
 /**
+ * Get active database name
+ * @returns {string}
+ */
+const getDatabaseName = () => {
+    return mongoose.connection.name || config.database.name;
+};
+
+/**
  * Close database connection
  */
 const closeConnection = async () => {
@@ -127,5 +135,6 @@ module.exports = {
     connectDB,
     isConnected,
     getConnectionStatus,
+    getDatabaseName,
     closeConnection,
 };
