@@ -8,6 +8,7 @@ const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config');
+const { AppError } = require('../middleware/errorHandler');
 
 // Create axios instance for NLP service
 const nlpClient = axios.create({
@@ -66,8 +67,13 @@ exports.healthCheck = async () => {
  * @param {string} targetRole - Target job role
  * @returns {Promise<Object>} - Analysis results
  */
-exports.analyzeResume = async (filePath, targetRole) => {
+exports.analyzeResume = async (filePath, targetRole, options = {}) => {
+    const reqId = options.reqId || 'sys';
+    const startTime = Date.now();
+
     try {
+        console.log(`[${reqId}] 📡 NLP Request: POST ${config.nlpService.endpoints.analyze}, targetRole=${targetRole}`);
+
         // Create form data for file upload
         const formData = new FormData();
         formData.append('file', fs.createReadStream(filePath));
@@ -80,18 +86,42 @@ exports.analyzeResume = async (filePath, targetRole) => {
                 headers: {
                     ...formData.getHeaders(),
                 },
+                timeout: config.nlpService.timeout,
             }
         );
 
+        const duration = Date.now() - startTime;
+        console.log(`[${reqId}] ✅ NLP Response: ${response.status} OK in ${duration}ms (skills=${response.data?.extracted_skills?.length || 0})`);
         return response.data;
     } catch (error) {
-        // Handle NLP service unavailability gracefully
-        if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-            console.warn('⚠️ NLP Service unavailable, using fallback analysis');
+        const duration = Date.now() - startTime;
+        const statusCode = error.response?.status;
+        const errorCode = error.code;
+
+        // Check if downstream service is unavailable, sleeping/cold-starting, timed out, or network failed
+        const isDownstreamUnavailable =
+            errorCode === 'ECONNREFUSED' ||
+            errorCode === 'ENOTFOUND' ||
+            errorCode === 'ECONNABORTED' ||
+            errorCode === 'ETIMEDOUT' ||
+            errorCode === 'EAI_AGAIN' ||
+            errorCode === 'ERR_NETWORK' ||
+            (statusCode && [502, 503, 504].includes(statusCode));
+
+        if (isDownstreamUnavailable) {
+            console.warn(`[${reqId}] ⚠️ NLP service unavailable (code=${errorCode || statusCode}, duration=${duration}ms). Using resilient fallback analysis.`);
             return generateFallbackAnalysis(filePath, targetRole);
         }
 
-        throw new Error(`NLP analysis failed: ${error.message}`);
+        // Handle user-facing document/validation errors from FastAPI
+        if (statusCode === 400 || statusCode === 422) {
+            const detailMsg = error.response?.data?.detail || error.response?.data?.error || 'Could not process the uploaded resume format.';
+            console.warn(`[${reqId}] ⚠️ NLP client error (${statusCode}): ${detailMsg}`);
+            throw new AppError(detailMsg, 400);
+        }
+
+        console.error(`[${reqId}] ❌ NLP analysis failed (${statusCode || errorCode}): ${error.message}`);
+        throw new AppError(`NLP service processing error: ${error.message}`, statusCode || 502);
     }
 };
 
@@ -113,12 +143,13 @@ exports.matchSkills = async (skills, targetRole) => {
 
         return response.data;
     } catch (error) {
-        if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-            console.warn('⚠️ NLP Service unavailable, using fallback matching');
+        const isUnavailable = error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || (error.response && [502, 503, 504].includes(error.response.status));
+        if (isUnavailable) {
+            console.warn('⚠️ NLP Service unavailable for matching, using fallback matching');
             return generateFallbackMatching(skills, targetRole);
         }
 
-        throw new Error(`Skill matching failed: ${error.message}`);
+        throw new AppError(`Skill matching failed: ${error.message}`, error.response?.status || 500);
     }
 };
 
@@ -282,6 +313,51 @@ const JOB_ROLES = {
             { name: 'User Testing', level: 'intermediate' },
         ],
     },
+    'ml-engineer': {
+        id: 'ml-engineer',
+        label: 'Machine Learning Engineer',
+        skills: [
+            { name: 'Python', level: 'advanced' },
+            { name: 'Machine Learning', level: 'advanced' },
+            { name: 'TensorFlow', level: 'advanced' },
+            { name: 'PyTorch', level: 'advanced' },
+            { name: 'Deep Learning', level: 'advanced' },
+            { name: 'Docker', level: 'intermediate' },
+            { name: 'AWS', level: 'intermediate' },
+            { name: 'Scikit-learn', level: 'advanced' },
+            { name: 'MLOps', level: 'intermediate' },
+            { name: 'SQL', level: 'intermediate' },
+        ],
+    },
+    'cloud-architect': {
+        id: 'cloud-architect',
+        label: 'Cloud Architect',
+        skills: [
+            { name: 'AWS', level: 'advanced' },
+            { name: 'Azure', level: 'advanced' },
+            { name: 'GCP', level: 'intermediate' },
+            { name: 'Terraform', level: 'advanced' },
+            { name: 'Kubernetes', level: 'advanced' },
+            { name: 'Docker', level: 'advanced' },
+            { name: 'Networking', level: 'advanced' },
+            { name: 'Security', level: 'advanced' },
+            { name: 'Microservices', level: 'advanced' },
+        ],
+    },
+    'product-manager': {
+        id: 'product-manager',
+        label: 'Product Manager',
+        skills: [
+            { name: 'Product Strategy', level: 'advanced' },
+            { name: 'Agile', level: 'advanced' },
+            { name: 'Scrum', level: 'advanced' },
+            { name: 'Data Analysis', level: 'intermediate' },
+            { name: 'User Research', level: 'advanced' },
+            { name: 'Jira', level: 'intermediate' },
+            { name: 'SQL', level: 'beginner' },
+            { name: 'A/B Testing', level: 'intermediate' },
+        ],
+    },
 };
 
 
@@ -394,15 +470,22 @@ function getCanonicalSkill(name) {
  * Generate fallback analysis when NLP service is unavailable
  */
 async function generateFallbackAnalysis(filePath, targetRole) {
-    // Read file content (simple text extraction for .txt files)
+    // Read file content (supports .txt or buffer-based ASCII string extraction)
     let text = '';
     const ext = path.extname(filePath).toLowerCase();
 
-    if (ext === '.txt') {
-        text = fs.readFileSync(filePath, 'utf-8');
-    } else {
-        // For PDF/DOCX, we'd need proper parsing - return basic response
-        text = 'Unable to parse file without NLP service';
+    try {
+        if (ext === '.txt') {
+            text = fs.readFileSync(filePath, 'utf-8');
+        } else {
+            // Extract ASCII/printable strings from binary resume files (PDF/DOCX)
+            const buffer = fs.readFileSync(filePath);
+            const matches = buffer.toString('binary').match(/[\x20-\x7E\n]{3,}/g);
+            text = matches ? matches.join(' ') : 'Extracted text fallback';
+        }
+    } catch (readErr) {
+        console.error('Error reading file for fallback analysis:', readErr.message);
+        text = '';
     }
 
     // Extract skills from text

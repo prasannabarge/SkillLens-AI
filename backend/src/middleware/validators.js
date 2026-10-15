@@ -78,8 +78,10 @@ exports.validateAnalysis = (req, res, next) => {
     const errors = [];
     const { targetRole } = req.body;
 
-    // Check if file was uploaded
-    if (!req.file) {
+    // Check if file was uploaded or failed file filter validation
+    if (req.fileValidationError) {
+        errors.push({ field: 'resume', message: req.fileValidationError });
+    } else if (!req.file) {
         errors.push({ field: 'resume', message: 'Resume file is required' });
     }
 
@@ -98,6 +100,8 @@ exports.validateAnalysis = (req, res, next) => {
             'cloud-architect',
             'product-manager',
             'ui-ux-designer',
+            'business-analyst',
+            'product-analyst',
         ];
 
         if (!validRoles.includes(targetRole)) {

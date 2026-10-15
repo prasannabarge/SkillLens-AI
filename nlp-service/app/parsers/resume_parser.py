@@ -13,6 +13,16 @@ logger = logging.getLogger(__name__)
 class ResumeParser:
     """Parses resume files and extracts text content"""
     
+    @staticmethod
+    def is_pdf(file_bytes: bytes) -> bool:
+        """Detect PDF format conforming to ISO 32000-1 (%PDF within first 1024 bytes)"""
+        return b'%PDF' in file_bytes[:1024]
+
+    @staticmethod
+    def is_docx(file_bytes: bytes) -> bool:
+        """Detect DOCX format"""
+        return file_bytes[:4] == b'PK\x03\x04' or b'word/' in file_bytes[:2048]
+
     def parse(self, file_bytes: bytes) -> str:
         """
         Parse resume file and extract text
@@ -23,18 +33,17 @@ class ResumeParser:
         Returns:
             Extracted text content
         """
-        # Try different parsers based on file signature
         text = None
         
         # Try PDF first
-        if file_bytes[:4] == b'%PDF':
+        if self.is_pdf(file_bytes):
             text = self._parse_pdf(file_bytes)
         
         # Try DOCX
-        elif file_bytes[:4] == b'PK\x03\x04':
+        elif self.is_docx(file_bytes):
             text = self._parse_docx(file_bytes)
         
-        # Try plain text
+        # Try plain text (only for non-binary formats)
         else:
             text = self._parse_text(file_bytes)
         
@@ -45,7 +54,7 @@ class ResumeParser:
         return text or ""
     
     def _parse_pdf(self, file_bytes: bytes) -> Optional[str]:
-        """Parse PDF file"""
+        """Parse PDF file with automatic multi-parser fallback"""
         try:
             import pdfplumber
             
@@ -56,12 +65,18 @@ class ResumeParser:
                     if page_text:
                         text_parts.append(page_text)
                 
-                return "\n".join(text_parts)
+                extracted = "\n".join(text_parts).strip()
+                if extracted:
+                    return extracted
+                
+                # If pdfplumber returned empty text, seamlessly try PyPDF2
+                logger.info("pdfplumber extracted empty text, attempting PyPDF2 fallback")
+                return self._parse_pdf_fallback(file_bytes)
         except ImportError:
             logger.warning("pdfplumber not installed, trying PyPDF2")
             return self._parse_pdf_fallback(file_bytes)
         except Exception as e:
-            logger.error(f"PDF parsing error: {e}")
+            logger.error(f"PDF parsing error with pdfplumber: {e}")
             return self._parse_pdf_fallback(file_bytes)
     
     def _parse_pdf_fallback(self, file_bytes: bytes) -> Optional[str]:

@@ -36,14 +36,17 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response.data,
     (error) => {
-        const message = error.response?.data?.error || error.message || 'An error occurred'
+        const message = error.response?.data?.error || error.response?.data?.detail || error.response?.data?.message || error.message || 'An error occurred'
 
         if (error.response?.status === 401) {
-            localStorage.removeItem('token')
-            localStorage.removeItem('user')
-            // Only redirect if not already on auth pages
-            if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
-                window.location.replace('/login')
+            const isRolesReq = error.config?.url?.includes('/analysis/roles')
+            if (!isRolesReq) {
+                localStorage.removeItem('token')
+                localStorage.removeItem('user')
+                // Only redirect if not already on auth pages
+                if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
+                    window.location.replace('/login')
+                }
             }
         }
 
@@ -117,7 +120,7 @@ export const analysisService = {
         formData.append('targetRole', targetRole)
 
         return apiClient.post('/analysis/analyze', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+            headers: { 'Content-Type': undefined },
             onUploadProgress: onUploadProgress,
             timeout: 60000, // 60 seconds for file upload
         })

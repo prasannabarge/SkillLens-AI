@@ -16,25 +16,39 @@ const config = require('../config');
  * POST /api/analysis/analyze
  */
 exports.analyzeResume = async (req, res, next) => {
+    const reqId = req.id || 'no-id';
     const startTime = Date.now();
     let analysis = null;
 
     try {
+        console.log(`[${reqId}] [REQUEST_ARRIVED] Route: POST /api/analysis/analyze, User: ${req.user?.id || 'anon'}, Role: ${req.body?.targetRole || 'none'}`);
+
         // Validate file upload
         if (!req.file) {
+            console.warn(`[${reqId}] [VALIDATION_FAIL] Missing resume file in upload`);
             return res.status(400).json({
                 success: false,
                 error: 'Please upload a resume file',
+                requestId: reqId,
             });
         }
 
         const { targetRole } = req.body;
         if (!targetRole) {
+            console.warn(`[${reqId}] [VALIDATION_FAIL] Missing targetRole in upload`);
             return res.status(400).json({
                 success: false,
                 error: 'Please select a target role',
+                requestId: reqId,
             });
         }
+
+        const sanitizedFileName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
+        console.log(`[${reqId}] [FILE_INGESTED] Name: ${sanitizedFileName}, Size: ${req.file.size} bytes, MimeType: ${req.file.mimetype}`);
+
+        const { getConnectionStatus } = require('../config/database');
+        const dbStatus = getConnectionStatus();
+        console.log(`[${reqId}] [DB_STATUS] MongoDB connection status: ${dbStatus}`);
 
         const filePath = req.file.path;
         const fileBuffer = await fs.readFile(filePath);
@@ -57,12 +71,14 @@ exports.analyzeResume = async (req, res, next) => {
         if (existingAnalysis) {
             // Clean up uploaded file
             await fs.unlink(filePath);
+            console.log(`[${reqId}] [CACHE_HIT] Analysis found from recent upload (${fileHash})`);
 
             return res.status(200).json({
                 success: true,
                 message: 'Analysis found from recent upload',
                 analysis: existingAnalysis,
                 cached: true,
+                requestId: reqId,
             });
         }
 
@@ -79,20 +95,28 @@ exports.analyzeResume = async (req, res, next) => {
         });
 
         // Send to NLP service for processing
-        console.log(`📝 Sending resume to NLP service for analysis...`);
+        console.log(`[${reqId}] [NLP_START] Sending resume to NLP service for analysis...`);
+        const nlpResult = await nlpService.analyzeResume(filePath, targetRole, { reqId });
+        console.log(`[${reqId}] [NLP_FINISH] ExtractedTextLength: ${nlpResult.extracted_text?.length || 0}, ExtractedSkills: ${nlpResult.extracted_skills?.length || 0}, Score: ${nlpResult.match_score || 0}`);
 
-        const nlpResult = await nlpService.analyzeResume(filePath, targetRole);
+        // Helper to normalize category to schema enum
+        const validCategories = ['programming', 'frontend', 'backend', 'database', 'cloud_devops', 'data_ml', 'tools', 'soft_skills', 'other'];
+        const normalizeCategory = (cat) => {
+            if (!cat || typeof cat !== 'string') return 'other';
+            const lower = cat.toLowerCase().trim();
+            return validCategories.includes(lower) ? lower : 'other';
+        };
 
         // Update analysis with results
         await analysis.complete({
-            extractedText: nlpResult.extracted_text,
+            extractedText: nlpResult.extracted_text || '',
             extractedSkills: nlpResult.extracted_skills?.map(skill => ({
                 name: skill.name || skill,
                 canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
                 rawName: skill.raw_name || skill.rawName,
                 level: skill.level || 'intermediate',
-                confidence: skill.confidence || 0.9,
-                category: skill.category || 'other',
+                confidence: typeof skill.confidence === 'number' ? skill.confidence : 0.9,
+                category: normalizeCategory(skill.category),
                 status: skill.status || 'present',
                 evidence: skill.evidence || [],
             })) || [],
@@ -100,14 +124,14 @@ exports.analyzeResume = async (req, res, next) => {
                 name: skill.name || skill,
                 canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
                 level: skill.level || 'intermediate',
-                category: skill.category || 'other',
+                category: normalizeCategory(skill.category),
             })) || [],
             matchedSkills: nlpResult.matched_skills?.map(skill => ({
                 name: skill.name || skill,
                 canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
                 level: skill.level || 'intermediate',
-                confidence: skill.confidence || 0.95,
-                category: skill.category || 'other',
+                confidence: typeof skill.confidence === 'number' ? skill.confidence : 0.95,
+                category: normalizeCategory(skill.category),
                 status: 'present',
                 evidence: skill.evidence || [],
             })) || [],
@@ -116,14 +140,13 @@ exports.analyzeResume = async (req, res, next) => {
                 canonicalName: skill.canonical_name || skill.canonicalName || skill.name || skill,
                 level: skill.level || 'beginner',
                 confidence: 0,
-                category: skill.category || 'other',
+                category: normalizeCategory(skill.category),
                 status: 'missing',
                 evidence: [],
             })) || [],
             matchScore: nlpResult.match_score || 0,
             recommendations: nlpResult.recommendations || [],
         });
-
 
         // Generate summary
         analysis.generateSummary();
@@ -139,16 +162,23 @@ exports.analyzeResume = async (req, res, next) => {
         // Clean up uploaded file
         await fs.unlink(filePath);
 
-        console.log(`✅ Analysis completed in ${analysis.processingTime}ms`);
+        console.log(`[${reqId}] [ANALYSIS_COMPLETE] Status: 201 Created, TotalDuration: ${analysis.processingTime}ms`);
 
         res.status(201).json({
             success: true,
             analysis,
+            requestId: reqId,
         });
     } catch (error) {
+        console.error(`[${reqId}] [ANALYSIS_ERROR] Caught in controller: ${error.message} (status: ${error.statusCode || 500})`);
+
         // Mark analysis as failed if it was created
         if (analysis) {
-            await analysis.fail(error.message);
+            try {
+                await analysis.fail(error.message);
+            } catch (failErr) {
+                console.error(`[${reqId}] [ANALYSIS_FAIL_ERR] Error marking analysis as failed:`, failErr.message);
+            }
         }
 
         // Clean up file if it exists
@@ -156,7 +186,7 @@ exports.analyzeResume = async (req, res, next) => {
             try {
                 await fs.unlink(req.file.path);
             } catch (unlinkError) {
-                console.error('Error cleaning up file:', unlinkError);
+                console.error(`[${reqId}] [FILE_CLEANUP_ERR] Error cleaning up file:`, unlinkError.message);
             }
         }
 

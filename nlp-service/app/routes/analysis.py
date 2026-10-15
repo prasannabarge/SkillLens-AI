@@ -87,14 +87,28 @@ async def analyze_resume(
             extracted_text = ""
         
         if not extracted_text or len(extracted_text.strip()) < 10:
-            # Fallback: try to decode as plain text
-            try:
-                extracted_text = file_bytes.decode('utf-8', errors='ignore')
-            except:
+            if resume_parser.is_pdf(file_bytes):
                 raise HTTPException(
-                    status_code=400, 
-                    detail="Could not extract text from resume. Please upload a text-based PDF, DOCX, or TXT file."
+                    status_code=400,
+                    detail="Could not extract text from the PDF resume. If this is a scanned or image-based document, please provide a text-based PDF, DOCX, or TXT file."
                 )
+            elif resume_parser.is_docx(file_bytes):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not extract text from the DOCX resume. Please ensure the document contains readable text and is not corrupted."
+                )
+            else:
+                # Fallback: try to decode as plain text
+                try:
+                    extracted_text = file_bytes.decode('utf-8', errors='ignore').strip()
+                except Exception:
+                    extracted_text = ""
+                
+                if not extracted_text or len(extracted_text) < 10:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Could not extract text from resume. Please upload a text-based PDF, DOCX, or TXT file."
+                    )
         
         logger.info(f"Extracted {len(extracted_text)} characters from resume")
         

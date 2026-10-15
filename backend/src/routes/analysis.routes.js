@@ -11,11 +11,11 @@ const { authenticate } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { validateAnalysis } = require('../middleware/validators');
 
-// All routes require authentication
-router.use(authenticate);
-
-// Get available job roles (no auth required for this)
+// Public routes: Get available job roles (no auth required)
 router.get('/roles', analysisController.getRoles);
+
+// All subsequent analysis routes require authentication
+router.use(authenticate);
 
 // Analyze resume
 router.post(

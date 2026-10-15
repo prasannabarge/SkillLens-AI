@@ -22,10 +22,17 @@ const userRoutes = require('./routes/user.routes');
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
 
+const crypto = require('crypto');
 const app = express();
 
 // ============================================
-// SECURITY MIDDLEWARE
+// CORRELATION ID
+// ============================================
+app.use((req, res, next) => {
+    req.id = req.headers['x-request-id'] || crypto.randomUUID();
+    res.setHeader('X-Request-ID', req.id);
+    next();
+});
 // ============================================
 
 // Helmet for security headers

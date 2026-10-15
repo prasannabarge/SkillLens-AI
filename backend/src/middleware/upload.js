@@ -33,11 +33,15 @@ const storage = multer.diskStorage({
 
 // File filter
 const fileFilter = (req, file, cb) => {
-    // Check MIME type
-    if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const isAllowedMime = config.upload.allowedMimeTypes.includes(file.mimetype);
+    const isAllowedExt = config.upload.allowedExtensions.includes(ext);
+
+    if (isAllowedMime && isAllowedExt) {
         cb(null, true);
     } else {
-        cb(new Error(`File type not allowed. Allowed types: ${config.upload.allowedExtensions.join(', ')}`), false);
+        req.fileValidationError = `File type not allowed. Allowed types: ${config.upload.allowedExtensions.join(', ')}`;
+        cb(null, false);
     }
 };
 
@@ -53,11 +57,20 @@ const upload = multer({
 
 // Error handling wrapper
 const handleUploadError = (err, req, res, next) => {
+    if (req.fileValidationError) {
+        return res.status(400).json({
+            success: false,
+            error: req.fileValidationError,
+            requestId: req.id,
+        });
+    }
+
     if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
             return res.status(400).json({
                 success: false,
                 error: `File too large. Maximum size is ${config.upload.maxSize / (1024 * 1024)}MB`,
+                requestId: req.id,
             });
         }
 
@@ -65,12 +78,14 @@ const handleUploadError = (err, req, res, next) => {
             return res.status(400).json({
                 success: false,
                 error: 'Too many files uploaded. Only 1 file allowed.',
+                requestId: req.id,
             });
         }
 
         return res.status(400).json({
             success: false,
             error: err.message,
+            requestId: req.id,
         });
     }
 
@@ -78,6 +93,7 @@ const handleUploadError = (err, req, res, next) => {
         return res.status(400).json({
             success: false,
             error: err.message,
+            requestId: req.id,
         });
     }
 

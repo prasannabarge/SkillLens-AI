@@ -24,10 +24,14 @@ exports.authenticate = async (req, res, next) => {
             token = req.cookies.token;
         }
 
+        const reqId = req.id || 'no-id';
+
         if (!token) {
+            console.warn(`[${reqId}] [AUTH_FAIL] Missing Authorization token on ${req.method} ${req.originalUrl}`);
             return res.status(401).json({
                 success: false,
                 error: 'Access denied. No token provided.',
+                requestId: reqId,
             });
         }
 
@@ -39,17 +43,21 @@ exports.authenticate = async (req, res, next) => {
             const user = await User.findById(decoded.id).select('-password');
 
             if (!user) {
+                console.warn(`[${reqId}] [AUTH_FAIL] User not found for token id: ${decoded.id}`);
                 return res.status(401).json({
                     success: false,
                     error: 'User no longer exists.',
+                    requestId: reqId,
                 });
             }
 
             // Check if user is active
             if (!user.isActive) {
+                console.warn(`[${reqId}] [AUTH_FAIL] Account deactivated for user: ${user._id}`);
                 return res.status(401).json({
                     success: false,
                     error: 'Account has been deactivated.',
+                    requestId: reqId,
                 });
             }
 
@@ -61,19 +69,24 @@ exports.authenticate = async (req, res, next) => {
                 role: user.role,
             };
 
+            console.log(`[${reqId}] [AUTH_SUCCESS] Authenticated user: ${user._id}`);
             next();
         } catch (jwtError) {
             if (jwtError.name === 'TokenExpiredError') {
+                console.warn(`[${reqId}] [AUTH_FAIL] Token has expired`);
                 return res.status(401).json({
                     success: false,
                     error: 'Token has expired. Please log in again.',
+                    requestId: reqId,
                 });
             }
 
             if (jwtError.name === 'JsonWebTokenError') {
+                console.warn(`[${reqId}] [AUTH_FAIL] Invalid token structure`);
                 return res.status(401).json({
                     success: false,
                     error: 'Invalid token.',
+                    requestId: reqId,
                 });
             }
 

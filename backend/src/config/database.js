@@ -4,6 +4,7 @@
  */
 
 const mongoose = require('mongoose');
+const config = require('./index');
 
 // Connection options for MongoDB Atlas
 const connectionOptions = {
@@ -12,6 +13,7 @@ const connectionOptions = {
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
     family: 4, // Use IPv4
+    dbName: config.database.name,
 };
 
 /**

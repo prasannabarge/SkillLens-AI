@@ -50,8 +50,8 @@ const config = {
 
     // NLP Service Configuration
     nlpService: {
-        baseUrl: process.env.NLP_SERVICE_URL || 'http://localhost:8000',
-        timeout: parseInt(process.env.NLP_SERVICE_TIMEOUT, 10) || 30000,
+        baseUrl: (process.env.NLP_SERVICE_URL || 'http://localhost:8000').replace(/\/+$/, ''),
+        timeout: parseInt(process.env.NLP_SERVICE_TIMEOUT, 10) || 60000,
         endpoints: {
             analyze: '/api/analyze',
             match: '/api/match',
@@ -76,10 +76,13 @@ const config = {
 
     // CORS Configuration
     cors: {
-        origins: (process.env.CORS_ORIGINS || 'http://localhost:3000').split(','),
+        origins: (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || 'http://localhost:3000')
+            .split(',')
+            .map(origin => origin.trim())
+            .filter(Boolean),
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-ID'],
     },
 
     // Rate Limiting

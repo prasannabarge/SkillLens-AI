@@ -38,3 +38,7 @@ coverage/
 # Misc
 *.pem
 .vercel
+
+# Uploads
+uploads/
+backend/uploads/
