@@ -19,6 +19,8 @@ const nlpClient = axios.create({
     },
 });
 
+exports.nlpClient = nlpClient;
+
 // Request interceptor for logging
 nlpClient.interceptors.request.use(
     (request) => {
@@ -38,14 +40,75 @@ nlpClient.interceptors.response.use(
         return response;
     },
     (error) => {
-        console.error('❌ NLP Response Error:', error.message);
+        const status = error.response?.status;
+        console.error(`❌ NLP Response Error: ${error.message} (status=${status || error.code || 'none'})`);
         if (error.response) {
-            console.error('   Status:', error.response.status);
-            console.error('   Data:', JSON.stringify(error.response.data));
+            const rawHeaders = error.response.headers || {};
+            const sanitizedHeaders = {
+                'content-type': rawHeaders['content-type'],
+                'retry-after': rawHeaders['retry-after'],
+                'cf-ray': rawHeaders['cf-ray'],
+                'rndr-id': rawHeaders['rndr-id'],
+                'server': rawHeaders['server'],
+                'x-render-origin-server': rawHeaders['x-render-origin-server'],
+                'ratelimit-limit': rawHeaders['ratelimit-limit'],
+                'ratelimit-remaining': rawHeaders['ratelimit-remaining'],
+                'ratelimit-reset': rawHeaders['ratelimit-reset'],
+            };
+            Object.keys(sanitizedHeaders).forEach((k) => {
+                if (sanitizedHeaders[k] === undefined) delete sanitizedHeaders[k];
+            });
+
+            let sanitizedBody = error.response.data;
+            if (typeof sanitizedBody === 'string') {
+                sanitizedBody = sanitizedBody.slice(0, 500);
+            } else if (typeof sanitizedBody === 'object' && sanitizedBody !== null) {
+                try {
+                    sanitizedBody = JSON.stringify(sanitizedBody).slice(0, 500);
+                } catch (_) {
+                    sanitizedBody = '[Unserializable object]';
+                }
+            }
+
+            console.error('   Diagnostic Headers:', JSON.stringify(sanitizedHeaders));
+            console.error('   Sanitized Body:', sanitizedBody);
         }
         return Promise.reject(error);
     }
 );
+
+/**
+ * Sleep helper for retry backoff
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise<void>}
+ */
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Parse Retry-After header into milliseconds with safety bounds
+ * @param {string|number|undefined} retryAfterHeader
+ * @param {number} fallbackDelayMs - Calculated exponential backoff
+ * @param {number} maxAllowedDelayMs - Maximum delay cap
+ * @returns {number} Delay in milliseconds
+ */
+function parseRetryAfter(retryAfterHeader, fallbackDelayMs = 2000, maxAllowedDelayMs = 10000) {
+    if (!retryAfterHeader) return fallbackDelayMs;
+
+    const numericSeconds = parseInt(retryAfterHeader, 10);
+    if (!isNaN(numericSeconds) && numericSeconds >= 0) {
+        return Math.min(numericSeconds * 1000, maxAllowedDelayMs);
+    }
+
+    const parsedDate = Date.parse(retryAfterHeader);
+    if (!isNaN(parsedDate)) {
+        const deltaMs = parsedDate - Date.now();
+        if (deltaMs > 0) {
+            return Math.min(deltaMs, maxAllowedDelayMs);
+        }
+    }
+
+    return fallbackDelayMs;
+}
 
 /**
  * Check if NLP service is healthy
@@ -65,63 +128,111 @@ exports.healthCheck = async () => {
  * Analyze resume file
  * @param {string} filePath - Path to the resume file
  * @param {string} targetRole - Target job role
+ * @param {Object} options - Options including reqId and retry config
  * @returns {Promise<Object>} - Analysis results
  */
 exports.analyzeResume = async (filePath, targetRole, options = {}) => {
     const reqId = options.reqId || 'sys';
     const startTime = Date.now();
+    const maxRetries = typeof options.maxRetries === 'number' ? options.maxRetries : 2;
+    let attempt = 0;
 
-    try {
-        console.log(`[${reqId}] 📡 NLP Request: POST ${config.nlpService.endpoints.analyze}, targetRole=${targetRole}`);
+    while (attempt <= maxRetries) {
+        try {
+            console.log(
+                `[${reqId}] 📡 NLP Request (attempt ${attempt + 1}/${maxRetries + 1}): POST ${config.nlpService.endpoints.analyze}, targetRole=${targetRole}`
+            );
 
-        // Create form data for file upload
-        const formData = new FormData();
-        formData.append('file', fs.createReadStream(filePath));
-        formData.append('target_role', targetRole);
+            // Re-create fresh FormData and stream per attempt since streams are single-use
+            const formData = new FormData();
+            formData.append('file', fs.createReadStream(filePath));
+            formData.append('target_role', targetRole);
 
-        const response = await nlpClient.post(
-            config.nlpService.endpoints.analyze,
-            formData,
-            {
-                headers: {
-                    ...formData.getHeaders(),
-                },
-                timeout: config.nlpService.timeout,
+            const response = await nlpClient.post(
+                config.nlpService.endpoints.analyze,
+                formData,
+                {
+                    headers: {
+                        ...formData.getHeaders(),
+                    },
+                    timeout: config.nlpService.timeout,
+                }
+            );
+
+            const duration = Date.now() - startTime;
+            console.log(
+                `[${reqId}] ✅ NLP Response: ${response.status} OK in ${duration}ms (skills=${response.data?.extracted_skills?.length || 0})`
+            );
+            return response.data;
+        } catch (error) {
+            const duration = Date.now() - startTime;
+            const statusCode = error.response?.status;
+            const errorCode = error.code;
+
+            // Handle HTTP 429 Rate Limiting with Bounded Exponential Backoff
+            if (statusCode === 429 && attempt < maxRetries) {
+                const retryAfterHeader = error.response?.headers?.['retry-after'];
+                const exponentialBase = 1500 * Math.pow(2, attempt);
+                const jitter = Math.floor(Math.random() * 400);
+                const calculatedDelay = exponentialBase + jitter;
+                const delayMs = parseRetryAfter(retryAfterHeader, calculatedDelay, 8000);
+
+                console.warn(
+                    `[${reqId}] ⚠️ NLP Service rate-limited (HTTP 429). Attempt ${attempt + 1}/${maxRetries + 1}. ` +
+                    `Backing off for ${delayMs}ms before retry (Retry-After: ${retryAfterHeader || 'none'}).`
+                );
+
+                await sleep(delayMs);
+                attempt++;
+                continue;
             }
-        );
 
-        const duration = Date.now() - startTime;
-        console.log(`[${reqId}] ✅ NLP Response: ${response.status} OK in ${duration}ms (skills=${response.data?.extracted_skills?.length || 0})`);
-        return response.data;
-    } catch (error) {
-        const duration = Date.now() - startTime;
-        const statusCode = error.response?.status;
-        const errorCode = error.code;
+            // If 429 rate limit is exhausted
+            if (statusCode === 429) {
+                const retryAfterHeader = error.response?.headers?.['retry-after'];
+                console.error(
+                    `[${reqId}] ❌ NLP Service rate limit (429) exhausted after ${attempt + 1} attempts (${duration}ms).`
+                );
+                const rateLimitError = new AppError(
+                    'The AI analysis service is experiencing high demand. Please wait a few moments and try submitting your resume again.',
+                    429
+                );
+                if (retryAfterHeader) {
+                    rateLimitError.retryAfter = retryAfterHeader;
+                }
+                throw rateLimitError;
+            }
 
-        // Check if downstream service is unavailable, sleeping/cold-starting, timed out, or network failed
-        const isDownstreamUnavailable =
-            errorCode === 'ECONNREFUSED' ||
-            errorCode === 'ENOTFOUND' ||
-            errorCode === 'ECONNABORTED' ||
-            errorCode === 'ETIMEDOUT' ||
-            errorCode === 'EAI_AGAIN' ||
-            errorCode === 'ERR_NETWORK' ||
-            (statusCode && [502, 503, 504].includes(statusCode));
+            // Check if downstream service is unavailable, sleeping/cold-starting, timed out, or network failed
+            const isDownstreamUnavailable =
+                errorCode === 'ECONNREFUSED' ||
+                errorCode === 'ENOTFOUND' ||
+                errorCode === 'ECONNABORTED' ||
+                errorCode === 'ETIMEDOUT' ||
+                errorCode === 'EAI_AGAIN' ||
+                errorCode === 'ERR_NETWORK' ||
+                (statusCode && [502, 503, 504].includes(statusCode));
 
-        if (isDownstreamUnavailable) {
-            console.warn(`[${reqId}] ⚠️ NLP service unavailable (code=${errorCode || statusCode}, duration=${duration}ms). Using resilient fallback analysis.`);
-            return generateFallbackAnalysis(filePath, targetRole);
+            if (isDownstreamUnavailable) {
+                console.warn(
+                    `[${reqId}] ⚠️ NLP service unavailable (code=${errorCode || statusCode}, duration=${duration}ms). Using resilient fallback analysis.`
+                );
+                return generateFallbackAnalysis(filePath, targetRole);
+            }
+
+            // Handle user-facing document/validation errors from FastAPI
+            if (statusCode === 400 || statusCode === 422) {
+                const detailMsg =
+                    error.response?.data?.detail ||
+                    error.response?.data?.error ||
+                    'Could not process the uploaded resume format.';
+                console.warn(`[${reqId}] ⚠️ NLP client error (${statusCode}): ${detailMsg}`);
+                throw new AppError(detailMsg, 400);
+            }
+
+            console.error(`[${reqId}] ❌ NLP analysis failed (${statusCode || errorCode}): ${error.message}`);
+            throw new AppError(`NLP service processing error: ${error.message}`, statusCode || 502);
         }
-
-        // Handle user-facing document/validation errors from FastAPI
-        if (statusCode === 400 || statusCode === 422) {
-            const detailMsg = error.response?.data?.detail || error.response?.data?.error || 'Could not process the uploaded resume format.';
-            console.warn(`[${reqId}] ⚠️ NLP client error (${statusCode}): ${detailMsg}`);
-            throw new AppError(detailMsg, 400);
-        }
-
-        console.error(`[${reqId}] ❌ NLP analysis failed (${statusCode || errorCode}): ${error.message}`);
-        throw new AppError(`NLP service processing error: ${error.message}`, statusCode || 502);
     }
 };
 
@@ -143,13 +254,19 @@ exports.matchSkills = async (skills, targetRole) => {
 
         return response.data;
     } catch (error) {
-        const isUnavailable = error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || (error.response && [502, 503, 504].includes(error.response.status));
+        const statusCode = error.response?.status;
+        const isUnavailable =
+            error.code === 'ECONNREFUSED' ||
+            error.code === 'ENOTFOUND' ||
+            error.code === 'ECONNABORTED' ||
+            error.code === 'ETIMEDOUT' ||
+            (statusCode && [429, 502, 503, 504].includes(statusCode));
         if (isUnavailable) {
-            console.warn('⚠️ NLP Service unavailable for matching, using fallback matching');
+            console.warn(`⚠️ NLP Service unavailable for matching (${statusCode || error.code}), using fallback matching`);
             return generateFallbackMatching(skills, targetRole);
         }
 
-        throw new AppError(`Skill matching failed: ${error.message}`, error.response?.status || 500);
+        throw new AppError(`Skill matching failed: ${error.message}`, statusCode || 500);
     }
 };
 

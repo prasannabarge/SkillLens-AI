@@ -16,8 +16,12 @@ export function useAnalysis() {
     const [uploadProgress, setUploadProgress] = useState(0)
     const [error, setError] = useState(null)
 
-    // Analyze resume
+    // Analyze resume with in-flight duplicate guard
     const analyzeResume = useCallback(async (file, targetRole) => {
+        if (uploading) {
+            console.warn('Analysis submission already in progress, ignoring duplicate call');
+            return null;
+        }
         setError(null)
         setUploading(true)
         setUploadProgress(0)
@@ -39,7 +43,7 @@ export function useAnalysis() {
             setUploading(false)
             throw err
         }
-    }, [])
+    }, [uploading])
 
     // Get single analysis
     const getAnalysis = useCallback(async (id) => {

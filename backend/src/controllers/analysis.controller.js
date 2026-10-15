@@ -82,6 +82,27 @@ exports.analyzeResume = async (req, res, next) => {
             });
         }
 
+        // Check for duplicate in-flight analysis currently processing
+        const inFlightAnalysis = await Analysis.findOne({
+            user: req.user.id,
+            resumeHash: fileHash,
+            targetRole,
+            status: 'processing',
+            createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) }, // In-flight within last 2 minutes
+        });
+
+        if (inFlightAnalysis) {
+            await fs.unlink(filePath);
+            console.warn(`[${reqId}] [DUPLICATE_IN_FLIGHT] Resume analysis already in progress for user ${req.user.id} (${fileHash})`);
+            return res.status(409).json({
+                success: false,
+                error: 'An analysis for this resume is already in progress. Please wait a moment for it to complete.',
+                inProgress: true,
+                analysisId: inFlightAnalysis._id,
+                requestId: reqId,
+            });
+        }
+
         // Create analysis record
         analysis = await Analysis.create({
             user: req.user.id,

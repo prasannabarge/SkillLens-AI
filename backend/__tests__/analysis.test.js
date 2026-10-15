@@ -289,4 +289,86 @@ describe('SkillLens Backend & Analysis Pipeline Regression Suite', () => {
             expect(res.headers['x-request-id'].length).toBeGreaterThan(10);
         });
     });
+
+    describe('7. HTTP 429 Rate Limiting, Bounded Backoff & Duplicate Submission Guards', () => {
+        it('POST /api/analysis/analyze should reject duplicate in-flight analysis with HTTP 409 Conflict', async () => {
+            // Mock findOne: first call for completed returns null, second call for processing returns in-flight doc
+            jest.spyOn(Analysis, 'findOne')
+                .mockResolvedValueOnce(null) // completed check
+                .mockResolvedValueOnce({
+                    _id: '507f1f77bcf86cd799439088',
+                    status: 'processing',
+                    createdAt: new Date(),
+                }); // processing check
+
+            const res = await request(app)
+                .post('/api/analysis/analyze')
+                .set('Authorization', `Bearer ${validToken}`)
+                .attach('resume', testTxtPath)
+                .field('targetRole', 'fullstack-developer');
+
+            expect(res.status).toBe(409);
+            expect(res.body.success).toBe(false);
+            expect(res.body.inProgress).toBe(true);
+            expect(res.body.error).toContain('already in progress');
+        });
+
+        it('nlpService.analyzeResume should retry on HTTP 429 and succeed when downstream recovers', async () => {
+            const rateLimitError = new Error('Request failed with status code 429');
+            rateLimitError.response = {
+                status: 429,
+                headers: { 'retry-after': '0' },
+                data: { message: 'Too Many Requests' },
+            };
+
+            const successData = {
+                extracted_text: 'Test resume text',
+                extracted_skills: [{ name: 'JavaScript' }],
+                required_skills: [{ name: 'JavaScript' }],
+                matched_skills: [{ name: 'JavaScript' }],
+                gap_skills: [],
+                match_score: 100,
+                recommendations: [],
+            };
+
+            // First call fails with 429, second call succeeds
+            let callCount = 0;
+            const clientSpy = jest.spyOn(nlpService.nlpClient, 'post').mockImplementation(() => {
+                callCount++;
+                if (callCount === 1) {
+                    return Promise.reject(rateLimitError);
+                }
+                return Promise.resolve({ status: 200, data: successData, config: { url: '/api/analyze' } });
+            });
+
+            const result = await nlpService.analyzeResume(testTxtPath, 'fullstack-developer', { maxRetries: 1 });
+            expect(callCount).toBe(2);
+            expect(result).toBeDefined();
+            expect(result.match_score).toBe(100);
+
+            clientSpy.mockRestore();
+        });
+
+        it('nlpService.analyzeResume should throw user-facing 429 error with Retry-After when retries are exhausted', async () => {
+            const rateLimitError = new Error('Request failed with status code 429');
+            rateLimitError.response = {
+                status: 429,
+                headers: { 'retry-after': '5' },
+                data: { message: 'Too Many Requests' },
+            };
+
+            const clientSpy = jest.spyOn(nlpService.nlpClient, 'post').mockRejectedValue(rateLimitError);
+
+            await expect(
+                nlpService.analyzeResume(testTxtPath, 'fullstack-developer', { maxRetries: 0 })
+            ).rejects.toMatchObject({
+                statusCode: 429,
+                message: expect.stringContaining('high demand'),
+                retryAfter: '5',
+            });
+
+            clientSpy.mockRestore();
+        });
+    });
 });
+

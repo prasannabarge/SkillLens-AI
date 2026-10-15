@@ -80,9 +80,13 @@ const sendErrorProd = (err, req, res) => {
     // Operational, trusted error: send message to client
     if (err.isOperational) {
         console.warn(`⚠️ [${reqId}] Operational Error (${err.statusCode}): ${err.message}`);
+        if (err.retryAfter) {
+            res.set('Retry-After', String(err.retryAfter));
+        }
         res.status(err.statusCode).json({
             success: false,
             error: err.message,
+            retryAfter: err.retryAfter || undefined,
             details: err.details || undefined,
             requestId: reqId,
         });

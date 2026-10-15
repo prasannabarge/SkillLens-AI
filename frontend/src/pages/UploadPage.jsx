@@ -48,6 +48,7 @@ function UploadPage() {
     const [targetRole, setTargetRole] = useState('')
     const [step, setStep] = useState(1) // 1: upload, 2: select role, 3: analyzing
     const [analysisError, setAnalysisError] = useState('')
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     // Load available roles & preselect from query parameter if available
     useEffect(() => {
@@ -62,6 +63,7 @@ function UploadPage() {
 
     // Handle file drop & validation
     const onDrop = useCallback((acceptedFiles, fileRejections) => {
+        if (uploading || isSubmitting) return
         setAnalysisError('')
         clearError()
 
@@ -86,7 +88,7 @@ function UploadPage() {
             setFile(selected)
             setStep(2)
         }
-    }, [clearError])
+    }, [clearError, uploading, isSubmitting])
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -98,6 +100,7 @@ function UploadPage() {
         },
         maxFiles: 1,
         maxSize: MAX_FILE_SIZE,
+        disabled: uploading || isSubmitting,
     })
 
     // Handle submission to backend API
@@ -112,24 +115,40 @@ function UploadPage() {
             return
         }
 
+        if (uploading || isSubmitting || step === 3) {
+            console.warn('Analysis submission already in progress, ignoring duplicate trigger.')
+            return
+        }
+
+        setIsSubmitting(true)
         setStep(3)
         clearError()
         setAnalysisError('')
 
         try {
             const response = await analyzeResume(file, targetRole)
+            if (!response) {
+                return
+            }
             const analysisId = response?.analysis?._id || response?.analysis?.id || response?._id
             toast.success('Resume analysis completed!')
             navigate(`/results/${analysisId}`)
         } catch (err) {
-            const friendlyMsg = err.message || 'Analysis could not be completed at this time. Please try again.'
+            const friendlyMsg = err.status === 429
+                ? 'The AI analysis service is experiencing high demand. Please wait a moment before trying again.'
+                : err.status === 409
+                ? 'An analysis for this resume is already in progress. Please wait a moment.'
+                : (err.message || 'Analysis could not be completed at this time. Please try again.')
             setAnalysisError(friendlyMsg)
             toast.error(friendlyMsg)
             setStep(2)
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
     const handleReset = () => {
+        if (uploading || isSubmitting) return
         setFile(null)
         setTargetRole('')
         setStep(1)
@@ -306,7 +325,9 @@ function UploadPage() {
                                 <Button
                                     variant="primary"
                                     onClick={handleAnalyze}
-                                    disabled={!targetRole}
+                                    disabled={!targetRole || uploading || isSubmitting || step === 3}
+                                    loading={uploading || isSubmitting}
+                                    loadingText="Analyzing Resume..."
                                     icon={ScanSearch}
                                     className="w-full sm:w-auto"
                                 >
