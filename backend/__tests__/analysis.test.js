@@ -433,6 +433,49 @@ describe('SkillLens Backend & Analysis Pipeline Regression Suite', () => {
             expect(res2.status).toBe(429);
             expect(res2.body.error).toContain('Too many requests from this IP');
         });
+
+        it('should seamlessly activate local NLP engine when downstream 429 occurs with allowFallback: true', async () => {
+            const rateLimitError = new Error('Request failed with status code 429');
+            rateLimitError.response = {
+                status: 429,
+                headers: { 'retry-after': '5' },
+                data: { message: 'Too Many Requests' },
+            };
+
+            const clientSpy = jest.spyOn(nlpService.nlpClient, 'post').mockRejectedValue(rateLimitError);
+
+            const result = await nlpService.analyzeResume(testTxtPath, 'fullstack-developer', {
+                maxRetries: 0,
+                allowFallback: true,
+            });
+
+            expect(result).toBeDefined();
+            expect(result.extracted_skills).toBeDefined();
+            expect(result.match_score).toBeGreaterThanOrEqual(0);
+            expect(result.matched_skills).toBeDefined();
+            expect(result.gap_skills).toBeDefined();
+
+            clientSpy.mockRestore();
+        });
+
+        it('should accurately extract skills, canonical names, categories and evidence from resume text', () => {
+            const sampleText = 'Senior Full Stack Engineer with 5 years experience in React, Node.js, TypeScript, PostgreSQL, and Docker. Built CI/CD pipelines with GitHub Actions.';
+            const extracted = nlpService.extractSkillsFromText(sampleText);
+
+            const skillNames = extracted.map(s => s.name);
+            expect(skillNames).toContain('React');
+            expect(skillNames).toContain('Node.js');
+            expect(skillNames).toContain('TypeScript');
+            expect(skillNames).toContain('PostgreSQL');
+            expect(skillNames).toContain('Docker');
+
+            const reactSkill = extracted.find(s => s.name === 'React');
+            expect(reactSkill.category).toBe('frontend');
+            expect(reactSkill.confidence).toBe(0.95);
+            expect(reactSkill.status).toBe('present');
+            expect(reactSkill.evidence.length).toBeGreaterThan(0);
+        });
     });
 });
+
 

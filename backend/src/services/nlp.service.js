@@ -7,6 +7,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const config = require('../config');
 const { AppError } = require('../middleware/errorHandler');
 
@@ -193,6 +194,10 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
                 console.error(
                     `[${reqId}] ❌ NLP Service rate limit (429) exhausted after ${attempt + 1} attempts (${duration}ms).`
                 );
+                if (options.allowFallback) {
+                    console.warn(`[${reqId}] ⚠️ Fallback explicitly requested via options for 429. Using resilient local NLP engine.`);
+                    return generateFallbackAnalysis(filePath, targetRole);
+                }
                 const rateLimitError = new AppError(
                     'The AI analysis service is experiencing high demand. Please wait a few moments and try submitting your resume again.',
                     429
@@ -499,6 +504,84 @@ const JOB_ROLES = {
     },
 };
 
+/**
+ * Skill Categories Mapping
+ */
+const SKILL_CATEGORIES = {
+    'JavaScript': 'programming',
+    'TypeScript': 'programming',
+    'Python': 'programming',
+    'Java': 'programming',
+    'C++': 'programming',
+    'C#': 'programming',
+    'Go': 'programming',
+    'Rust': 'programming',
+    'PHP': 'programming',
+    'Ruby': 'programming',
+    'React': 'frontend',
+    'Next.js': 'frontend',
+    'Vue.js': 'frontend',
+    'Angular': 'frontend',
+    'HTML': 'frontend',
+    'CSS': 'frontend',
+    'CSS/SCSS': 'frontend',
+    'Tailwind': 'frontend',
+    'Redux': 'frontend',
+    'Node.js': 'backend',
+    'Express': 'backend',
+    'FastAPI': 'backend',
+    'Django': 'backend',
+    'Flask': 'backend',
+    'Spring Boot': 'backend',
+    'REST API': 'tools',
+    'GraphQL': 'tools',
+    'SQL': 'database',
+    'MySQL': 'database',
+    'PostgreSQL': 'database',
+    'MongoDB': 'database',
+    'NoSQL': 'database',
+    'Redis': 'database',
+    'Docker': 'cloud_devops',
+    'Kubernetes': 'cloud_devops',
+    'AWS': 'cloud_devops',
+    'Azure': 'cloud_devops',
+    'Google Cloud': 'cloud_devops',
+    'CI/CD': 'cloud_devops',
+    'Terraform': 'cloud_devops',
+    'Linux': 'cloud_devops',
+    'Git': 'tools',
+    'GitHub': 'tools',
+    'GitLab': 'tools',
+    'Jest': 'tools',
+    'Webpack': 'tools',
+    'Jira': 'tools',
+    'Agile': 'soft_skills',
+    'Scrum': 'soft_skills',
+    'Machine Learning': 'data_ml',
+    'Deep Learning': 'data_ml',
+    'TensorFlow': 'data_ml',
+    'PyTorch': 'data_ml',
+    'Scikit-learn': 'data_ml',
+    'Pandas': 'data_ml',
+    'NumPy': 'data_ml',
+    'Data Analysis': 'data_ml',
+    'Data Visualization': 'data_ml',
+    'Statistics': 'data_ml',
+    'Tableau': 'data_ml',
+    'Power BI': 'data_ml',
+    'Excel': 'data_ml',
+    'Figma': 'other',
+    'UI Design': 'other',
+    'UX Research': 'other',
+    'Prototyping': 'other',
+    'Adobe XD': 'other',
+    'Product Strategy': 'soft_skills',
+    'User Research': 'other',
+    'A/B Testing': 'data_ml',
+    'Microservices': 'backend',
+    'Networking': 'cloud_devops',
+    'Security': 'cloud_devops',
+};
 
 /**
  * Extract skills from text using pattern matching
@@ -509,13 +592,18 @@ const SKILL_PATTERNS = [
     /\b(python)\b/gi,
     /\b(java)\b/gi,
     /\b(react|react\.js|reactjs)\b/gi,
+    /\b(next\.js|nextjs)\b/gi,
     /\b(node|node\.js|nodejs)\b/gi,
+    /\b(express|express\.js|expressjs)\b/gi,
     /\b(angular)\b/gi,
     /\b(vue|vue\.js|vuejs)\b/gi,
     /\b(html5?)\b/gi,
     /\b(css3?|scss|sass)\b/gi,
+    /\b(tailwind|tailwindcss)\b/gi,
+    /\b(redux|redux toolkit)\b/gi,
     /\b(sql|mysql|postgresql|postgres)\b/gi,
     /\b(mongodb|nosql)\b/gi,
+    /\b(redis)\b/gi,
     /\b(docker)\b/gi,
     /\b(kubernetes|k8s)\b/gi,
     /\b(aws|amazon web services)\b/gi,
@@ -523,11 +611,32 @@ const SKILL_PATTERNS = [
     /\b(gcp|google cloud)\b/gi,
     /\b(git|github|gitlab)\b/gi,
     /\b(ci\/cd|jenkins|circleci)\b/gi,
+    /\b(terraform)\b/gi,
+    /\b(linux|unix)\b/gi,
     /\b(rest api|restful|graphql)\b/gi,
+    /\b(jest|mocha|cypress)\b/gi,
     /\b(machine learning|ml)\b/gi,
+    /\b(deep learning)\b/gi,
     /\b(tensorflow|pytorch)\b/gi,
+    /\b(scikit-learn|sklearn)\b/gi,
     /\b(pandas|numpy)\b/gi,
+    /\b(data analysis)\b/gi,
+    /\b(data visualization)\b/gi,
+    /\b(statistics)\b/gi,
+    /\b(tableau)\b/gi,
+    /\b(power bi)\b/gi,
+    /\b(excel|ms excel)\b/gi,
+    /\b(figma)\b/gi,
+    /\b(ui design)\b/gi,
+    /\b(ux research)\b/gi,
+    /\b(prototyping)\b/gi,
+    /\b(adobe xd)\b/gi,
     /\b(agile|scrum)\b/gi,
+    /\b(jira)\b/gi,
+    /\b(a\/b testing)\b/gi,
+    /\b(microservices)\b/gi,
+    /\b(networking)\b/gi,
+    /\b(security)\b/gi,
 ];
 
 const SKILL_NAMES = {
@@ -540,9 +649,14 @@ const SKILL_NAMES = {
     'react': 'React',
     'react.js': 'React',
     'reactjs': 'React',
+    'next.js': 'Next.js',
+    'nextjs': 'Next.js',
     'node': 'Node.js',
     'node.js': 'Node.js',
     'nodejs': 'Node.js',
+    'express': 'Express',
+    'express.js': 'Express',
+    'expressjs': 'Express',
     'angular': 'Angular',
     'vue': 'Vue.js',
     'vue.js': 'Vue.js',
@@ -553,12 +667,17 @@ const SKILL_NAMES = {
     'css3': 'CSS',
     'scss': 'CSS/SCSS',
     'sass': 'CSS/SCSS',
+    'tailwind': 'Tailwind',
+    'tailwindcss': 'Tailwind',
+    'redux': 'Redux',
+    'redux toolkit': 'Redux',
     'sql': 'SQL',
     'mysql': 'MySQL',
     'postgresql': 'PostgreSQL',
     'postgres': 'PostgreSQL',
     'mongodb': 'MongoDB',
     'nosql': 'NoSQL',
+    'redis': 'Redis',
     'docker': 'Docker',
     'kubernetes': 'Kubernetes',
     'k8s': 'Kubernetes',
@@ -573,26 +692,46 @@ const SKILL_NAMES = {
     'ci/cd': 'CI/CD',
     'jenkins': 'CI/CD',
     'circleci': 'CI/CD',
+    'terraform': 'Terraform',
+    'linux': 'Linux',
+    'unix': 'Linux',
     'rest api': 'REST API',
     'rest apis': 'REST API',
     'restful': 'REST API',
     'restful api': 'REST API',
     'restful apis': 'REST API',
     'graphql': 'GraphQL',
+    'jest': 'Jest',
+    'mocha': 'Jest',
+    'cypress': 'Jest',
     'machine learning': 'Machine Learning',
     'ml': 'Machine Learning',
+    'deep learning': 'Deep Learning',
     'tensorflow': 'TensorFlow',
     'pytorch': 'PyTorch',
+    'scikit-learn': 'Scikit-learn',
+    'sklearn': 'Scikit-learn',
     'pandas': 'Pandas',
     'numpy': 'NumPy',
+    'data analysis': 'Data Analysis',
+    'data visualization': 'Data Visualization',
+    'statistics': 'Statistics',
+    'tableau': 'Tableau',
+    'power bi': 'Power BI',
+    'excel': 'Excel',
+    'ms excel': 'Excel',
+    'figma': 'Figma',
+    'ui design': 'UI Design',
+    'ux research': 'UX Research',
+    'prototyping': 'Prototyping',
+    'adobe xd': 'Adobe XD',
     'agile': 'Agile',
     'scrum': 'Scrum',
-    'excel': 'Excel',
-    'microsoft excel': 'Excel',
-    'ms excel': 'Excel',
-    'power bi': 'Power BI',
-    'microsoft power bi': 'Power BI',
-    'tableau': 'Tableau',
+    'jira': 'Jira',
+    'a/b testing': 'A/B Testing',
+    'microservices': 'Microservices',
+    'networking': 'Networking',
+    'security': 'Security',
 };
 
 /**
@@ -604,30 +743,109 @@ function getCanonicalSkill(name) {
     return SKILL_NAMES[lower] || name.trim();
 }
 
+/**
+ * Extract text from PDF buffer using built-in zlib decompression
+ */
+function extractTextFromPdfBuffer(buffer) {
+    const fullText = [];
+    const binStr = buffer.toString('binary');
+
+    // 1. Decompress FlateDecode streams
+    let pos = 0;
+    while ((pos = binStr.indexOf('stream', pos)) !== -1) {
+        const streamStart = binStr.indexOf('\n', pos) + 1;
+        const streamEnd = binStr.indexOf('endstream', streamStart);
+        if (streamEnd === -1) break;
+
+        const rawChunk = buffer.subarray(streamStart, streamEnd);
+        try {
+            const decompressed = zlib.inflateSync(rawChunk);
+            const str = decompressed.toString('utf-8');
+
+            const tjMatches = str.match(/\(([^()]+)\)\s*T[jJ]/g);
+            if (tjMatches) {
+                tjMatches.forEach((m) => {
+                    fullText.push(m.replace(/^\(/, '').replace(/\)\s*T[jJ]$/, ''));
+                });
+            }
+
+            const arrayMatches = str.match(/\[([^\]]+)\]\s*TJ/g);
+            if (arrayMatches) {
+                arrayMatches.forEach((m) => {
+                    const parts = m.match(/\(([^()]+)\)/g);
+                    if (parts) {
+                        fullText.push(parts.map((p) => p.slice(1, -1)).join(' '));
+                    }
+                });
+            }
+
+            const words = str.match(/[A-Za-z0-9+#.-]{2,}/g);
+            if (words) {
+                fullText.push(words.join(' '));
+            }
+        } catch (_) {
+            // Not zlib stream
+        }
+        pos = streamEnd + 9;
+    }
+
+    // 2. Direct string literals
+    const directMatches = binStr.match(/\(([^()]{2,})\)\s*T[jJ]/g);
+    if (directMatches) {
+        directMatches.forEach((m) => {
+            fullText.push(m.replace(/^\(/, '').replace(/\)\s*T[jJ]$/, ''));
+        });
+    }
+
+    // 3. Fallback printable characters
+    if (fullText.length === 0) {
+        const printable = binStr.match(/[\x20-\x7E\n]{3,}/g);
+        return printable ? printable.join(' ') : '';
+    }
+
+    return fullText.join(' ');
+}
+
+/**
+ * Robust text extractor from file supporting TXT, PDF, and DOCX
+ */
+function extractTextFromFile(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    try {
+        if (ext === '.txt') {
+            return fs.readFileSync(filePath, 'utf-8');
+        }
+
+        const buffer = fs.readFileSync(filePath);
+        if (ext === '.pdf') {
+            const pdfText = extractTextFromPdfBuffer(buffer);
+            if (pdfText && pdfText.trim().length > 10) return pdfText;
+        }
+
+        // DOCX or generic binary printable extraction
+        const binStr = buffer.toString('binary');
+        if (buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4B) {
+            const xmlMatches = binStr.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
+            if (xmlMatches && xmlMatches.length > 0) {
+                return xmlMatches.map((m) => m.replace(/<[^>]+>/g, '')).join(' ');
+            }
+        }
+
+        const matches = binStr.match(/[\x20-\x7E\n]{3,}/g);
+        return matches ? matches.join(' ') : 'Extracted text fallback';
+    } catch (readErr) {
+        console.error('Error reading file for fallback analysis:', readErr.message);
+        return '';
+    }
+}
 
 /**
  * Generate fallback analysis when NLP service is unavailable
  */
 async function generateFallbackAnalysis(filePath, targetRole) {
-    // Read file content (supports .txt or buffer-based ASCII string extraction)
-    let text = '';
-    const ext = path.extname(filePath).toLowerCase();
+    const text = extractTextFromFile(filePath);
 
-    try {
-        if (ext === '.txt') {
-            text = fs.readFileSync(filePath, 'utf-8');
-        } else {
-            // Extract ASCII/printable strings from binary resume files (PDF/DOCX)
-            const buffer = fs.readFileSync(filePath);
-            const matches = buffer.toString('binary').match(/[\x20-\x7E\n]{3,}/g);
-            text = matches ? matches.join(' ') : 'Extracted text fallback';
-        }
-    } catch (readErr) {
-        console.error('Error reading file for fallback analysis:', readErr.message);
-        text = '';
-    }
-
-    // Extract skills from text
+    // Extract skills from text with context and evidence
     const extractedSkills = extractSkillsFromText(text);
 
     // Get required skills for role
@@ -638,25 +856,35 @@ async function generateFallbackAnalysis(filePath, targetRole) {
     const matched = [];
     const gaps = [];
 
-    requiredSkills.forEach(reqSkill => {
+    requiredSkills.forEach((reqSkill) => {
         const reqCanon = getCanonicalSkill(reqSkill.name);
         const found = extractedSkills.find(
-            s => getCanonicalSkill(s.name) === reqCanon
+            (s) => getCanonicalSkill(s.name) === reqCanon
         );
+
+        const category = reqSkill.category || SKILL_CATEGORIES[reqCanon] || 'other';
 
         if (found) {
             matched.push({
-                ...reqSkill,
+                name: reqCanon,
+                canonical_name: reqCanon,
                 canonicalName: reqCanon,
+                level: reqSkill.level || 'intermediate',
+                category,
                 confidence: 0.95,
                 status: 'present',
+                evidence: found.evidence || [`Found ${reqCanon} in resume`],
             });
         } else {
             gaps.push({
-                ...reqSkill,
+                name: reqCanon,
+                canonical_name: reqCanon,
                 canonicalName: reqCanon,
+                level: reqSkill.level || 'intermediate',
+                category,
                 confidence: 0,
                 status: 'missing',
+                evidence: [],
             });
         }
     });
@@ -666,13 +894,19 @@ async function generateFallbackAnalysis(filePath, targetRole) {
         : 0;
 
     return {
-        extracted_text: text,
+        extracted_text: text.slice(0, 5000),
         extracted_skills: extractedSkills,
-        required_skills: requiredSkills,
+        required_skills: requiredSkills.map((s) => ({
+            name: s.name,
+            canonical_name: getCanonicalSkill(s.name),
+            canonicalName: getCanonicalSkill(s.name),
+            level: s.level || 'intermediate',
+            category: s.category || SKILL_CATEGORIES[getCanonicalSkill(s.name)] || 'other',
+        })),
         matched_skills: matched,
         gap_skills: gaps,
         match_score: matchScore,
-        recommendations: gaps.slice(0, 5).map(skill => ({
+        recommendations: gaps.slice(0, 5).map((skill) => ({
             skill: skill.name,
             priority: 'high',
             reason: `${skill.name} is a key requirement for ${roleData.label}`,
@@ -681,30 +915,41 @@ async function generateFallbackAnalysis(filePath, targetRole) {
 }
 
 /**
- * Extract skills from text using patterns
+ * Extract skills from text using patterns with evidence collection
  */
 function extractSkillsFromText(text) {
-    const skills = new Set();
+    const skillsMap = new Map();
+    const lines = text.split(/[\r\n.]+/).filter((l) => l.trim().length > 3);
 
-    SKILL_PATTERNS.forEach(pattern => {
+    SKILL_PATTERNS.forEach((pattern) => {
         const matches = text.match(pattern);
         if (matches) {
-            matches.forEach(match => {
-                const normalized = getCanonicalSkill(match);
-                if (normalized) {
-                    skills.add(normalized);
+            matches.forEach((match) => {
+                const canonical = getCanonicalSkill(match);
+                if (canonical && !skillsMap.has(canonical)) {
+                    // Find contextual evidence line
+                    const evidenceLine = lines.find((l) =>
+                        new RegExp(`\\b${match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(l)
+                    );
+
+                    skillsMap.set(canonical, {
+                        name: canonical,
+                        canonical_name: canonical,
+                        canonicalName: canonical,
+                        raw_name: match,
+                        rawName: match,
+                        level: 'intermediate',
+                        category: SKILL_CATEGORIES[canonical] || 'other',
+                        confidence: 0.95,
+                        status: 'present',
+                        evidence: evidenceLine ? [evidenceLine.trim().slice(0, 150)] : [`Mentioned ${canonical}`],
+                    });
                 }
             });
         }
     });
 
-    return Array.from(skills).map(name => ({
-        name,
-        canonicalName: name,
-        level: 'intermediate',
-        confidence: 0.9,
-        status: 'present',
-    }));
+    return Array.from(skillsMap.values());
 }
 
 /**
@@ -717,20 +962,35 @@ function generateFallbackMatching(skills, targetRole) {
     const matched = [];
     const gaps = [];
 
-    requiredSkills.forEach(reqSkill => {
+    requiredSkills.forEach((reqSkill) => {
         const reqCanon = getCanonicalSkill(reqSkill.name);
-        const found = skills.find(s => {
+        const found = skills.find((s) => {
             const raw = typeof s === 'string' ? s : (s.name || '');
             return getCanonicalSkill(raw) === reqCanon;
         });
 
+        const category = reqSkill.category || SKILL_CATEGORIES[reqCanon] || 'other';
+
         if (found) {
-            matched.push(reqSkill);
+            matched.push({
+                ...reqSkill,
+                canonicalName: reqCanon,
+                canonical_name: reqCanon,
+                category,
+                status: 'present',
+                confidence: 0.95,
+            });
         } else {
-            gaps.push(reqSkill);
+            gaps.push({
+                ...reqSkill,
+                canonicalName: reqCanon,
+                canonical_name: reqCanon,
+                category,
+                status: 'missing',
+                confidence: 0,
+            });
         }
     });
-
 
     const matchScore = requiredSkills.length > 0
         ? Math.round((matched.length / requiredSkills.length) * 100)
@@ -759,9 +1019,16 @@ function getLocalRoleSkills(roleId) {
  * Get all local job roles
  */
 function getLocalJobRoles() {
-    return Object.values(JOB_ROLES).map(role => ({
+    return Object.values(JOB_ROLES).map((role) => ({
         id: role.id,
         label: role.label,
         skillCount: role.skills.length,
     }));
 }
+
+exports.generateFallbackAnalysis = generateFallbackAnalysis;
+exports.generateFallbackMatching = generateFallbackMatching;
+exports.getLocalRoleSkills = getLocalRoleSkills;
+exports.getLocalJobRoles = getLocalJobRoles;
+exports.extractSkillsFromText = extractSkillsFromText;
+
