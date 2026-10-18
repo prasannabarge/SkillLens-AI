@@ -7,7 +7,6 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
 const config = require('../config');
 const { AppError } = require('../middleware/errorHandler');
 
@@ -173,10 +172,10 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
             // Handle HTTP 429 Rate Limiting with Bounded Exponential Backoff
             if (statusCode === 429 && attempt < maxRetries) {
                 const retryAfterHeader = error.response?.headers?.['retry-after'];
-                const exponentialBase = 1500 * Math.pow(2, attempt);
-                const jitter = Math.floor(Math.random() * 400);
+                const exponentialBase = 2000 * Math.pow(2, attempt);
+                const jitter = Math.floor(Math.random() * 500);
                 const calculatedDelay = exponentialBase + jitter;
-                const delayMs = parseRetryAfter(retryAfterHeader, calculatedDelay, 5000);
+                const delayMs = parseRetryAfter(retryAfterHeader, calculatedDelay, 10000);
 
                 console.warn(
                     `[${reqId}] ⚠️ NLP Service rate-limited (HTTP 429). Attempt ${attempt + 1}/${maxRetries + 1}. ` +
@@ -744,70 +743,9 @@ function getCanonicalSkill(name) {
 }
 
 /**
- * Extract text from PDF buffer using built-in zlib decompression
- */
-function extractTextFromPdfBuffer(buffer) {
-    const fullText = [];
-    const binStr = buffer.toString('binary');
-
-    // 1. Decompress FlateDecode streams
-    let pos = 0;
-    while ((pos = binStr.indexOf('stream', pos)) !== -1) {
-        const streamStart = binStr.indexOf('\n', pos) + 1;
-        const streamEnd = binStr.indexOf('endstream', streamStart);
-        if (streamEnd === -1) break;
-
-        const rawChunk = buffer.subarray(streamStart, streamEnd);
-        try {
-            const decompressed = zlib.inflateSync(rawChunk);
-            const str = decompressed.toString('utf-8');
-
-            const tjMatches = str.match(/\(([^()]+)\)\s*T[jJ]/g);
-            if (tjMatches) {
-                tjMatches.forEach((m) => {
-                    fullText.push(m.replace(/^\(/, '').replace(/\)\s*T[jJ]$/, ''));
-                });
-            }
-
-            const arrayMatches = str.match(/\[([^\]]+)\]\s*TJ/g);
-            if (arrayMatches) {
-                arrayMatches.forEach((m) => {
-                    const parts = m.match(/\(([^()]+)\)/g);
-                    if (parts) {
-                        fullText.push(parts.map((p) => p.slice(1, -1)).join(' '));
-                    }
-                });
-            }
-
-            const words = str.match(/[A-Za-z0-9+#.-]{2,}/g);
-            if (words) {
-                fullText.push(words.join(' '));
-            }
-        } catch (_) {
-            // Not zlib stream
-        }
-        pos = streamEnd + 9;
-    }
-
-    // 2. Direct string literals
-    const directMatches = binStr.match(/\(([^()]{2,})\)\s*T[jJ]/g);
-    if (directMatches) {
-        directMatches.forEach((m) => {
-            fullText.push(m.replace(/^\(/, '').replace(/\)\s*T[jJ]$/, ''));
-        });
-    }
-
-    // 3. Fallback printable characters
-    if (fullText.length === 0) {
-        const printable = binStr.match(/[\x20-\x7E\n]{3,}/g);
-        return printable ? printable.join(' ') : '';
-    }
-
-    return fullText.join(' ');
-}
-
-/**
- * Robust text extractor from file supporting TXT, PDF, and DOCX
+ * Safe text extractor for plain text files
+ * Note: PDF and complex document formats require the Python FastAPI service (pdfplumber/PyPDF2).
+ * Unverified binary decompression is strictly avoided to prevent inaccurate extraction.
  */
 function extractTextFromFile(filePath) {
     const ext = path.extname(filePath).toLowerCase();
@@ -815,24 +753,8 @@ function extractTextFromFile(filePath) {
         if (ext === '.txt') {
             return fs.readFileSync(filePath, 'utf-8');
         }
-
-        const buffer = fs.readFileSync(filePath);
-        if (ext === '.pdf') {
-            const pdfText = extractTextFromPdfBuffer(buffer);
-            if (pdfText && pdfText.trim().length > 10) return pdfText;
-        }
-
-        // DOCX or generic binary printable extraction
-        const binStr = buffer.toString('binary');
-        if (buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4B) {
-            const xmlMatches = binStr.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
-            if (xmlMatches && xmlMatches.length > 0) {
-                return xmlMatches.map((m) => m.replace(/<[^>]+>/g, '')).join(' ');
-            }
-        }
-
-        const matches = binStr.match(/[\x20-\x7E\n]{3,}/g);
-        return matches ? matches.join(' ') : 'Extracted text fallback';
+        // Complex binary formats require dedicated parsers in the FastAPI NLP service.
+        return '';
     } catch (readErr) {
         console.error('Error reading file for fallback analysis:', readErr.message);
         return '';
@@ -840,10 +762,17 @@ function extractTextFromFile(filePath) {
 }
 
 /**
- * Generate fallback analysis when NLP service is unavailable
+ * Generate fallback analysis when explicitly requested (e.g. for text-based resumes in offline/test scenarios)
+ * Strictly avoids fabricating results for unparsed binary files.
  */
 async function generateFallbackAnalysis(filePath, targetRole) {
     const text = extractTextFromFile(filePath);
+    if (!text || text.trim().length < 10) {
+        throw new AppError(
+            'The AI analysis service is temporarily unavailable to parse binary documents. Please wait a moment and try submitting again.',
+            503
+        );
+    }
 
     // Extract skills from text with context and evidence
     const extractedSkills = extractSkillsFromText(text);
@@ -871,9 +800,9 @@ async function generateFallbackAnalysis(filePath, targetRole) {
                 canonicalName: reqCanon,
                 level: reqSkill.level || 'intermediate',
                 category,
-                confidence: 0.95,
+                confidence: 0.85,
                 status: 'present',
-                evidence: found.evidence || [`Found ${reqCanon} in resume`],
+                evidence: found.evidence || [`Found ${reqCanon} in resume text`],
             });
         } else {
             gaps.push({
@@ -911,6 +840,7 @@ async function generateFallbackAnalysis(filePath, targetRole) {
             priority: 'high',
             reason: `${skill.name} is a key requirement for ${roleData.label}`,
         })),
+        is_fallback: true,
     };
 }
 

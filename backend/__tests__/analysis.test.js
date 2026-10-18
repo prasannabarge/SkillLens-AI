@@ -468,12 +468,79 @@ describe('SkillLens Backend & Analysis Pipeline Regression Suite', () => {
             expect(skillNames).toContain('TypeScript');
             expect(skillNames).toContain('PostgreSQL');
             expect(skillNames).toContain('Docker');
+        });
 
-            const reactSkill = extracted.find(s => s.name === 'React');
-            expect(reactSkill.category).toBe('frontend');
-            expect(reactSkill.confidence).toBe(0.95);
-            expect(reactSkill.status).toBe('present');
-            expect(reactSkill.evidence.length).toBeGreaterThan(0);
+        it('should refuse to fabricate analysis for binary PDF files in fallback and throw 503 instead', async () => {
+            await expect(
+                nlpService.generateFallbackAnalysis(testPdfPath, 'fullstack-developer')
+            ).rejects.toMatchObject({
+                statusCode: 503,
+                message: expect.stringContaining('temporarily unavailable'),
+            });
+        });
+
+        it('POST /api/analysis/analyze should handle downstream 429 by marking analysis failed, cleaning up file, and returning 429 with Retry-After', async () => {
+            jest.spyOn(Analysis, 'findOne').mockResolvedValue(null);
+            const mockCreatedAnalysis = {
+                _id: '507f1f77bcf86cd799439099',
+                fail: jest.fn().mockResolvedValue(true),
+            };
+            jest.spyOn(Analysis, 'create').mockResolvedValue(mockCreatedAnalysis);
+
+            const rateLimitAppError = new AppError('The AI analysis service is experiencing high demand. Please wait a few moments and try submitting your resume again.', 429);
+            rateLimitAppError.retryAfter = '10';
+
+            const analyzeSpy = jest.spyOn(nlpService, 'analyzeResume').mockRejectedValue(rateLimitAppError);
+
+            const res = await request(app)
+                .post('/api/analysis/analyze')
+                .set('Authorization', `Bearer ${validToken}`)
+                .attach('resume', testTxtPath)
+                .field('targetRole', 'fullstack-developer');
+
+            expect(res.status).toBe(429);
+            expect(res.body.success).toBe(false);
+            expect(res.body.error).toContain('high demand');
+            expect(mockCreatedAnalysis.fail).toHaveBeenCalledWith(expect.stringContaining('high demand'));
+
+            analyzeSpy.mockRestore();
+        });
+
+        it('should allow a successful retry after an earlier failed attempt (failed docs do not block retries)', async () => {
+            // FindOne for duplicate completed returns null (a failed doc does not match status: completed)
+            jest.spyOn(Analysis, 'findOne').mockResolvedValue(null);
+
+            const mockCreatedAnalysis = {
+                _id: '507f1f77bcf86cd799439099',
+                complete: jest.fn().mockResolvedValue(true),
+                generateSummary: jest.fn().mockReturnValue({ strengths: [], areasToImprove: [], quickWins: [] }),
+                save: jest.fn().mockResolvedValue(true),
+                overallMatchScore: 85,
+                processingTime: 150,
+            };
+            jest.spyOn(Analysis, 'create').mockResolvedValue(mockCreatedAnalysis);
+
+            const analyzeSpy = jest.spyOn(nlpService, 'analyzeResume').mockResolvedValue({
+                extracted_text: 'JavaScript, React, Node.js',
+                extracted_skills: [{ name: 'JavaScript' }, { name: 'React' }],
+                required_skills: [{ name: 'JavaScript' }, { name: 'React' }],
+                matched_skills: [{ name: 'JavaScript' }, { name: 'React' }],
+                gap_skills: [],
+                match_score: 100,
+                recommendations: [],
+            });
+
+            const res = await request(app)
+                .post('/api/analysis/analyze')
+                .set('Authorization', `Bearer ${validToken}`)
+                .attach('resume', testTxtPath)
+                .field('targetRole', 'fullstack-developer');
+
+            expect(res.status).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(mockCreatedAnalysis.complete).toHaveBeenCalled();
+
+            analyzeSpy.mockRestore();
         });
     });
 });

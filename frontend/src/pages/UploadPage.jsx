@@ -219,12 +219,25 @@ function UploadPage() {
 
                 {/* Error Banner */}
                 {(analysisError || hookError) && (
-                    <div className="max-w-xl mx-auto mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-start gap-3 animate-in fade-in duration-150">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-                        <div className="flex-1">
-                            <p className="font-semibold text-rose-200">Unable to proceed</p>
-                            <p className="mt-0.5 text-rose-300/90">{analysisError || hookError}</p>
+                    <div className="max-w-xl mx-auto mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3 animate-in fade-in duration-150">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                            <div>
+                                <p className="font-semibold text-rose-200">Analysis Notice</p>
+                                <p className="mt-0.5 text-rose-300/90">{analysisError || hookError}</p>
+                            </div>
                         </div>
+                        {file && targetRole && (
+                            <button
+                                type="button"
+                                onClick={handleAnalyze}
+                                disabled={isSubmitting || uploading}
+                                className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-medium text-xs transition-colors flex items-center gap-1.5 shrink-0 border border-rose-500/30 disabled:opacity-50"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Retry</span>
+                            </button>
+                        )}
                     </div>
                 )}
 

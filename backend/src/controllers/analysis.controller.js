@@ -115,9 +115,9 @@ exports.analyzeResume = async (req, res, next) => {
             status: 'processing',
         });
 
-        // Send to NLP service for processing with resilient fallback
+        // Send to NLP service for processing
         console.log(`[${reqId}] [NLP_START] Sending resume to NLP service for analysis...`);
-        const nlpResult = await nlpService.analyzeResume(filePath, targetRole, { reqId, allowFallback: true });
+        const nlpResult = await nlpService.analyzeResume(filePath, targetRole, { reqId });
         console.log(`[${reqId}] [NLP_FINISH] ExtractedTextLength: ${nlpResult.extracted_text?.length || 0}, ExtractedSkills: ${nlpResult.extracted_skills?.length || 0}, Score: ${nlpResult.match_score || 0}`);
 
         // Helper to normalize category to schema enum
