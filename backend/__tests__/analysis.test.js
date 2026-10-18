@@ -246,29 +246,60 @@ describe('SkillLens Backend & Analysis Pipeline Regression Suite', () => {
             analyzeSpy.mockRestore();
         });
 
-        it('should gracefully fallback when NLP service times out or is unreachable', async () => {
+        it('should reject with 504 AppError when NLP service times out and never report fake success', async () => {
+            const timeoutError = new Error('timeout of 70000ms exceeded');
+            timeoutError.code = 'ECONNABORTED';
+            const axiosSpy = jest.spyOn(nlpService.nlpClient, 'post').mockRejectedValue(timeoutError);
+
+            await expect(
+                nlpService.analyzeResume(testTxtPath, 'fullstack-developer')
+            ).rejects.toMatchObject({
+                statusCode: 504,
+                message: expect.stringContaining('warming up'),
+            });
+
+            axiosSpy.mockRestore();
+        });
+
+        it('should reject with 503 AppError when NLP service is unavailable (ECONNREFUSED/502/503)', async () => {
+            const connRefusedError = new Error('connect ECONNREFUSED 127.0.0.1:8000');
+            connRefusedError.code = 'ECONNREFUSED';
+            const axiosSpy = jest.spyOn(nlpService.nlpClient, 'post').mockRejectedValue(connRefusedError);
+
+            await expect(
+                nlpService.analyzeResume(testTxtPath, 'fullstack-developer')
+            ).rejects.toMatchObject({
+                statusCode: 503,
+                message: expect.stringContaining('temporarily unavailable'),
+            });
+
+            axiosSpy.mockRestore();
+        });
+
+        it('should handle downstream timeout in controller by marking analysis failed and cleaning up file', async () => {
             jest.spyOn(Analysis, 'findOne').mockResolvedValue(null);
             const mockCreatedAnalysis = {
                 _id: '507f1f77bcf86cd799439099',
-                complete: jest.fn().mockResolvedValue(true),
-                generateSummary: jest.fn().mockReturnValue({ strengths: [], areasToImprove: [], quickWins: [] }),
-                save: jest.fn().mockResolvedValue(true),
-                overallMatchScore: 80,
-                processingTime: 150,
+                fail: jest.fn().mockResolvedValue(true),
             };
             jest.spyOn(Analysis, 'create').mockResolvedValue(mockCreatedAnalysis);
 
-            // Test fallback function directly with a simulated connection timeout
-            const timeoutError = new Error('timeout of 60000ms exceeded');
-            timeoutError.code = 'ECONNABORTED';
-            const axiosSpy = jest.spyOn(require('axios').Axios.prototype, 'post').mockRejectedValue(timeoutError);
+            const analyzeSpy = jest.spyOn(nlpService, 'analyzeResume').mockRejectedValue(
+                new AppError('The AI analysis engine is currently warming up or taking longer than expected.', 504)
+            );
 
-            const fallbackResult = await nlpService.analyzeResume(testTxtPath, 'fullstack-developer');
-            expect(fallbackResult).toBeDefined();
-            expect(fallbackResult.extracted_skills).toBeDefined();
-            expect(fallbackResult.matched_skills).toBeDefined();
+            const res = await request(app)
+                .post('/api/analysis/analyze')
+                .set('Authorization', `Bearer ${validToken}`)
+                .attach('resume', testTxtPath)
+                .field('targetRole', 'fullstack-developer');
 
-            axiosSpy.mockRestore();
+            expect(res.status).toBe(504);
+            expect(res.body.success).toBe(false);
+            expect(res.body.error).toMatch(/warming up/i);
+            expect(mockCreatedAnalysis.fail).toHaveBeenCalledWith(expect.stringContaining('warming up'));
+
+            analyzeSpy.mockRestore();
         });
     });
 
@@ -368,6 +399,39 @@ describe('SkillLens Backend & Analysis Pipeline Regression Suite', () => {
             });
 
             clientSpy.mockRestore();
+        });
+
+        it('should verify configured timeout is at least 70000ms and below Render proxy 100s limit', () => {
+            expect(config.nlpService.timeout).toBeGreaterThanOrEqual(70000);
+            expect(config.nlpService.timeout).toBeLessThan(100000);
+        });
+
+        it('should distinguish general IP rate limiting from upstream AI high demand', async () => {
+            const express = require('express');
+            const rateLimit = require('express-rate-limit');
+            const testApp = express();
+            testApp.set('trust proxy', 1);
+
+            const testLimiter = rateLimit({
+                windowMs: 60 * 1000,
+                max: 1,
+                standardHeaders: true,
+                legacyHeaders: false,
+                message: { error: 'Too many requests from this IP, please try again later.' },
+            });
+
+            testApp.get('/api/test-limiter', testLimiter, (req, res) => {
+                res.status(200).json({ success: true });
+            });
+
+            // 1st request succeeds
+            const res1 = await request(testApp).get('/api/test-limiter');
+            expect(res1.status).toBe(200);
+
+            // 2nd request hits IP rate limit with clear IP message
+            const res2 = await request(testApp).get('/api/test-limiter');
+            expect(res2.status).toBe(429);
+            expect(res2.body.error).toContain('Too many requests from this IP');
         });
     });
 });

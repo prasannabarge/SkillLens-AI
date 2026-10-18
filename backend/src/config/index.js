@@ -84,7 +84,7 @@ const config = {
     // NLP Service Configuration
     nlpService: {
         baseUrl: (process.env.NLP_SERVICE_URL || 'http://localhost:8000').replace(/\/+$/, ''),
-        timeout: parseInt(process.env.NLP_SERVICE_TIMEOUT, 10) || 60000,
+        timeout: parseInt(process.env.NLP_SERVICE_TIMEOUT, 10) || 70000,
         endpoints: {
             analyze: '/api/analyze',
             match: '/api/match',

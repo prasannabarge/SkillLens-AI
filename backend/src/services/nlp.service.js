@@ -134,7 +134,7 @@ exports.healthCheck = async () => {
 exports.analyzeResume = async (filePath, targetRole, options = {}) => {
     const reqId = options.reqId || 'sys';
     const startTime = Date.now();
-    const maxRetries = typeof options.maxRetries === 'number' ? options.maxRetries : 2;
+    const maxRetries = typeof options.maxRetries === 'number' ? options.maxRetries : 1;
     let attempt = 0;
 
     while (attempt <= maxRetries) {
@@ -175,7 +175,7 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
                 const exponentialBase = 1500 * Math.pow(2, attempt);
                 const jitter = Math.floor(Math.random() * 400);
                 const calculatedDelay = exponentialBase + jitter;
-                const delayMs = parseRetryAfter(retryAfterHeader, calculatedDelay, 8000);
+                const delayMs = parseRetryAfter(retryAfterHeader, calculatedDelay, 5000);
 
                 console.warn(
                     `[${reqId}] ⚠️ NLP Service rate-limited (HTTP 429). Attempt ${attempt + 1}/${maxRetries + 1}. ` +
@@ -203,21 +203,41 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
                 throw rateLimitError;
             }
 
-            // Check if downstream service is unavailable, sleeping/cold-starting, timed out, or network failed
+            // Handle timeout / cold-start delay honestly without superficial fallback
+            if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
+                console.error(
+                    `[${reqId}] ❌ NLP service timed out after ${duration}ms (code=${errorCode}). Downstream engine is likely warming up.`
+                );
+                if (options.allowFallback) {
+                    console.warn(`[${reqId}] ⚠️ Fallback explicitly requested via options.`);
+                    return generateFallbackAnalysis(filePath, targetRole);
+                }
+                throw new AppError(
+                    'The AI analysis engine is currently warming up or taking longer than expected. Please wait a moment and try submitting your resume again.',
+                    504
+                );
+            }
+
+            // Check if downstream service is unavailable, restarting, or network failed
             const isDownstreamUnavailable =
                 errorCode === 'ECONNREFUSED' ||
                 errorCode === 'ENOTFOUND' ||
-                errorCode === 'ECONNABORTED' ||
-                errorCode === 'ETIMEDOUT' ||
                 errorCode === 'EAI_AGAIN' ||
                 errorCode === 'ERR_NETWORK' ||
                 (statusCode && [502, 503, 504].includes(statusCode));
 
             if (isDownstreamUnavailable) {
-                console.warn(
-                    `[${reqId}] ⚠️ NLP service unavailable (code=${errorCode || statusCode}, duration=${duration}ms). Using resilient fallback analysis.`
+                console.error(
+                    `[${reqId}] ❌ NLP service unavailable (code=${errorCode || statusCode}, duration=${duration}ms).`
                 );
-                return generateFallbackAnalysis(filePath, targetRole);
+                if (options.allowFallback) {
+                    console.warn(`[${reqId}] ⚠️ Fallback explicitly requested via options.`);
+                    return generateFallbackAnalysis(filePath, targetRole);
+                }
+                throw new AppError(
+                    'The AI analysis service is temporarily unavailable. Please try again shortly.',
+                    503
+                );
             }
 
             // Handle user-facing document/validation errors from FastAPI
@@ -293,7 +313,9 @@ exports.getRoleSkills = async (roleId) => {
  */
 exports.getJobRoles = async () => {
     try {
-        const response = await nlpClient.get(config.nlpService.endpoints.roles || '/api/roles');
+        const response = await nlpClient.get(config.nlpService.endpoints.roles || '/api/roles', {
+            timeout: 5000,
+        });
         return response.data;
     } catch (error) {
         console.warn('⚠️ Using local job roles data');

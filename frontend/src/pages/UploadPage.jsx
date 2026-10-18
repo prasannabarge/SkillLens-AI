@@ -134,11 +134,16 @@ function UploadPage() {
             toast.success('Resume analysis completed!')
             navigate(`/results/${analysisId}`)
         } catch (err) {
-            const friendlyMsg = err.status === 429
-                ? 'The AI analysis service is experiencing high demand. Please wait a moment before trying again.'
-                : err.status === 409
-                ? 'An analysis for this resume is already in progress. Please wait a moment.'
-                : (err.message || 'Analysis could not be completed at this time. Please try again.')
+            let friendlyMsg = err.message || 'Analysis could not be completed at this time. Please try again.'
+            if (err.status === 429) {
+                friendlyMsg = err.message && err.message.toLowerCase().includes('ip')
+                    ? err.message
+                    : 'The AI analysis service is experiencing high demand. Please wait a moment before trying again.'
+            } else if (err.status === 409) {
+                friendlyMsg = 'An analysis for this resume is already in progress. Please wait a moment.'
+            } else if (err.status === 504 || err.status === 503) {
+                friendlyMsg = err.message || 'The AI analysis engine is currently warming up. Please wait a moment and try again.'
+            }
             setAnalysisError(friendlyMsg)
             toast.error(friendlyMsg)
             setStep(2)

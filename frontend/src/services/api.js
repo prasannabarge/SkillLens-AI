@@ -122,7 +122,7 @@ export const analysisService = {
         return apiClient.post('/analysis/analyze', formData, {
             headers: { 'Content-Type': undefined },
             onUploadProgress: onUploadProgress,
-            timeout: 60000, // 60 seconds for file upload
+            timeout: 75000, // 75 seconds for file upload and downstream AI processing
         })
     },
 
