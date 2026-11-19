@@ -3,12 +3,13 @@
  * With authentication context, global shell dialogs, and protected routes
  */
 
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import CommandPalette from './components/ui/CommandPalette'
 import ProfileModal from './components/ui/ProfileModal'
+import { warmUpCloudServices } from './services/warmup.service'
 
 // Pages
 import HomePage from './pages/HomePage'
@@ -124,6 +125,11 @@ function ShellProvider({ children }) {
 }
 
 function App() {
+    useEffect(() => {
+        // Preemptively wake up cloud backend and downstream AI services on initial launch
+        warmUpCloudServices()
+    }, [])
+
     return (
         <Router>
             <AuthProvider>

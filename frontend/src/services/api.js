@@ -6,7 +6,17 @@
 
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const sanitizeApiBaseUrl = (raw) => {
+    try {
+        if (!raw || typeof raw !== 'string') return 'http://localhost:5000/api'
+        const trimmed = raw.trim().replace(/\/+$/, '')
+        return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
+    } catch {
+        return 'http://localhost:5000/api'
+    }
+}
+const API_BASE_URL = sanitizeApiBaseUrl(rawApiUrl)
 
 // Create axios instance with defaults
 const apiClient = axios.create({
