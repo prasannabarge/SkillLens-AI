@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Section header patterns
 SECTION_PATTERNS = [
-    (re.compile(r'^(technical\s+skills?|skills?(\s*(&|and)\s*abilities)?|core\s+competencies|technologies|tech\s+stack|tools(\s*(&|and)\s*technologies)?|proficiencies)\b', re.IGNORECASE), "skills"),
+    (re.compile(r'^(technical\s+skills?|skills?(\s*(&|and)\s*abilities)?|core\s+competencies|technologies|tech\s+stack|tools(\s*(&|and)\s*technologies)?|proficiencies|data\s+skills|programming\s+languages|languages(\s*(&|and)\s*tools)?|frameworks(\s*(&|and)\s*libraries)?|technical\s+proficiencies)\b', re.IGNORECASE), "skills"),
     (re.compile(r'^(work\s+experience|professional\s+experience|employment\s+history|experience|career\s+history)\b', re.IGNORECASE), "experience"),
     (re.compile(r'^(projects?|personal\s+projects?|academic\s+projects?|key\s+projects?|notable\s+projects?)\b', re.IGNORECASE), "projects"),
     (re.compile(r'^(education|academic\s+background|qualifications|academic\s+history)\b', re.IGNORECASE), "education"),
@@ -66,9 +66,11 @@ class SkillExtractor:
 
         for pattern, canonical_name, raw_term, category in self.taxonomy.compiled_patterns:
             for section_name, lines in sections:
+                matched_in_lines = False
                 for line in lines:
                     match = pattern.search(line)
                     if match:
+                        matched_in_lines = True
                         matched_str = match.group(0)
                         evidence_str = self._format_evidence(line, match.start(), match.end())
                         level = self._estimate_level(line, matched_str)
@@ -96,6 +98,39 @@ class SkillExtractor:
                             if self._level_rank(level) > self._level_rank(existing["level"]):
                                 existing["level"] = level
                             # Accumulate unique evidence (up to 3 distinct lines)
+                            if evidence_str and evidence_str not in existing["evidence"] and len(existing["evidence"]) < 3:
+                                existing["evidence"].append(evidence_str)
+
+                # Check multi-line span within section if not matched in individual lines
+                # This guarantees multi-word skills split across line breaks (e.g. Data\nVisualization)
+                # are recognized seamlessly while preserving section boundaries.
+                if not matched_in_lines and len(lines) > 1:
+                    section_blob = " ".join(lines)
+                    match = pattern.search(section_blob)
+                    if match:
+                        matched_str = match.group(0)
+                        evidence_str = self._format_evidence(section_blob, match.start(), match.end())
+                        level = self._estimate_level(section_blob, matched_str)
+                        confidence = self._calculate_confidence(section_name, section_blob)
+
+                        if canonical_name not in found_skills:
+                            found_skills[canonical_name] = {
+                                "name": canonical_name,
+                                "raw_name": matched_str,
+                                "canonical_name": canonical_name,
+                                "category": category,
+                                "level": level,
+                                "confidence": confidence,
+                                "evidence": [evidence_str] if evidence_str else [],
+                                "section": section_name,
+                                "mention_count": 1,
+                            }
+                        else:
+                            existing = found_skills[canonical_name]
+                            existing["mention_count"] += 1
+                            existing["confidence"] = min(1.0, round(existing["confidence"] + 0.05, 2))
+                            if self._level_rank(level) > self._level_rank(existing["level"]):
+                                existing["level"] = level
                             if evidence_str and evidence_str not in existing["evidence"] and len(existing["evidence"]) < 3:
                                 existing["evidence"].append(evidence_str)
 

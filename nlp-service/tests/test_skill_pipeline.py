@@ -407,3 +407,179 @@ def test_evidence_presence(extractor, matcher):
     assert "HTML" in res["details"]["HTML"]["evidence"][0]
     assert len(res["details"]["CSS"]["evidence"]) > 0
     assert "CSS" in res["details"]["CSS"]["evidence"][0]
+
+
+# ============================================================================
+# 4. COMPREHENSIVE ROLE-WIDE REGRESSION SUITE (ALL 12 ROLES & CATEGORIES A-J)
+# ============================================================================
+
+def test_user_reported_data_analyst_resume(extractor, matcher):
+    """
+    Direct reproduction of the user-reported issue:
+    Resume contains 'Data Visualization' under 'Data Skills:'.
+    Must match 'Data Visualization' with 100% confidence and not flag it as a gap.
+    """
+    resume = """
+    Languages & Tools: Python, SQL, Power BI, MS Excel, Git.
+    Python Libraries: Pandas, NumPy.
+    Data Skills: EDA, Data Cleaning, Data Visualization, Statistical Analysis, KPI Reporting, API Integration, JSON.
+    Tools: JIRA, Confluence, Figma, Draw.io, MS Office Suite.
+    Methodologies: Agile, Scrum, SDLC.
+    Core Competencies: Analytical Thinking, Data Storytelling, Problem Solving, Stakeholder Collaboration
+    """
+    extracted = extractor.extract_skills(resume)
+    reqs = get_required_skills("data-analyst")
+    result = matcher.match_skills(extracted, reqs, resume_text=resume)
+
+    assert "Data Visualization" in result["matched"], "Data Visualization must be in matched skills!"
+    assert "Data Visualization" not in result["gaps"], "Data Visualization must NOT be in gaps!"
+    assert result["details"]["Data Visualization"]["status"] == "present"
+    assert "SQL" in result["matched"]
+    assert "Excel" in result["matched"]
+    assert "Python" in result["matched"]
+    assert "Pandas" in result["matched"]
+    assert "Statistics" in result["matched"]
+    assert "Power BI" in result["matched"]
+    assert result["score"] >= 88.0
+
+
+@pytest.mark.parametrize("role_id", [
+    "frontend-developer",
+    "backend-developer",
+    "fullstack-developer",
+    "data-scientist",
+    "data-analyst",
+    "devops-engineer",
+    "ml-engineer",
+    "cloud-architect",
+    "product-manager",
+    "ui-ux-designer",
+    "business-analyst",
+    "product-analyst",
+])
+def test_category_a_exact_recognition_all_12_roles(extractor, matcher, role_id):
+    """Category A: Explicit canonical skill names for every role must be recognized 100%."""
+    reqs = get_required_skills(role_id)
+    skill_names = [r["name"] for r in reqs]
+    resume = f"Technical Skills: {', '.join(skill_names)}"
+    extracted = extractor.extract_skills(resume)
+    result = matcher.match_skills(extracted, reqs, resume_text=resume)
+
+    for skill in skill_names:
+        assert skill in result["matched"], f"Role '{role_id}': Expected '{skill}' to be matched."
+    assert len(result["gaps"]) == 0
+    assert result["score"] == 100.0
+
+
+def test_category_b_aliases_all_roles(extractor, matcher):
+    """Category B: Common industry abbreviations and aliases must resolve to canonical skills."""
+    aliases_test_map = {
+        "data-analyst": ("Skills: Structured Query Language, MS Excel, Python 3, Pandas Dataframes, Data Viz, Tableau Desktop, Stats, PowerBI",
+                         ["SQL", "Excel", "Python", "Pandas", "Data Visualization", "Tableau", "Statistics", "Power BI"]),
+        "backend-developer": ("Skills: NodeJS, ES6, Python, Relational Database (SQL), Mongo, RESTful APIs, Git, Containerization (Docker), ExpressJS, PgSQL",
+                              ["Node.js", "JavaScript", "Python", "SQL", "MongoDB", "REST API", "Git", "Docker", "Express", "PostgreSQL"]),
+        "devops-engineer": ("Skills: Docker, K8s, Amazon Web Services, Linux, Bash Scripting, Continuous Integration / Continuous Deployment (CI/CD), HashiCorp Terraform, Git VCS, Python, Jenkins CI",
+                            ["Docker", "Kubernetes", "AWS", "Linux", "Bash", "CI/CD", "Terraform", "Git", "Python", "Jenkins"]),
+        "ml-engineer": ("Skills: Python, Statistical Learning (ML), TF2, Torch, Deep Neural Networks, Docker, AWS Cloud, Sklearn, MLOps, SQL",
+                        ["Python", "Machine Learning", "TensorFlow", "PyTorch", "Deep Learning", "Docker", "AWS", "Scikit-learn", "MLOps", "SQL"]),
+        "cloud-architect": ("Skills: AWS Cloud, MS Azure, GCP Cloud, HashiCorp Terraform, K8s, Docker, Computer Networks, Infosec & Cybersecurity, Microservice Architecture",
+                            ["AWS", "Azure", "GCP", "Terraform", "Kubernetes", "Docker", "Networking", "Security", "Microservices"]),
+    }
+    for role_id, (resume, expected_matched) in aliases_test_map.items():
+        reqs = get_required_skills(role_id)
+        extracted = extractor.extract_skills(resume)
+        result = matcher.match_skills(extracted, reqs, resume_text=resume)
+        for expected in expected_matched:
+            assert expected in result["matched"], f"Role '{role_id}': Expected alias for '{expected}' to match."
+
+
+def test_category_c_formatting_line_breaks_and_hyphens(extractor, matcher):
+    """Category C: Skills wrapped across newlines, multi-spaces, or hyphenated must be matched."""
+    multiline_resume = """
+    CORE SKILLS:
+    - Data
+      Visualization
+    - Machine
+      Learning
+    - Deep
+      Learning
+    - Power-BI
+    - A-B Testing
+    - CI-CD
+    - Micro-services
+    - Postgre-SQL
+    - User
+      Research
+    """
+    extracted = extractor.extract_skills(multiline_resume)
+    test_skills = ["Data Visualization", "Machine Learning", "Deep Learning", "Power BI", "A/B Testing", "CI/CD", "Microservices", "PostgreSQL", "User Research"]
+    result = matcher.match_skills(extracted, test_skills, resume_text=multiline_resume)
+
+    for skill in test_skills:
+        assert skill in result["matched"], f"Expected formatted/multi-line '{skill}' to be matched."
+
+
+def test_category_d_uk_us_spelling_variations(extractor, matcher):
+    """Category D: UK/International spelling variations must map to canonical US skills."""
+    uk_resume = "Skills: Data Visualisation, Statistical Modelling, Behavioural Analysis, Performance Optimisation"
+    extracted = extractor.extract_skills(uk_resume)
+    result = matcher.match_skills(extracted, ["Data Visualization"], resume_text=uk_resume)
+
+    assert "Data Visualization" in result["matched"], "Data Visualisation (UK) must match Data Visualization!"
+    assert result["details"]["Data Visualization"]["status"] == "present"
+
+
+def test_category_e_negative_matching(extractor, matcher):
+    """Category E: Unrelated skills must NEVER be falsely matched."""
+    resume = "Technical Skills: Java, Spring Boot, Angular, Oracle, C++"
+    extracted = extractor.extract_skills(resume)
+    
+    result = matcher.match_skills(extracted, ["Python", "React", "JavaScript"], resume_text=resume)
+    assert "Python" in result["gaps"], "Java must NOT match Python!"
+    assert "React" in result["gaps"], "Angular must NOT match React!"
+    assert "JavaScript" in result["gaps"], "Java must NOT match JavaScript!"
+    assert len(result["matched"]) == 0
+
+
+def test_category_f_skill_hierarchy_and_ontology_inference(extractor, matcher):
+    """Category F: Parent competencies are inferred via demonstrated child tools with explainable evidence."""
+    # 1. Power BI demonstrates Data Visualization
+    resume_bi = "Experience: Developed business KPI dashboards in Power BI and automated queries in PostgreSQL."
+    ext_bi = extractor.extract_skills(resume_bi)
+    res_bi = matcher.match_skills(ext_bi, ["Data Visualization", "SQL"], resume_text=resume_bi)
+    assert "Data Visualization" in res_bi["matched"], "Power BI must infer Data Visualization!"
+    assert "SQL" in res_bi["matched"], "PostgreSQL must infer SQL!"
+    assert res_bi["details"]["Data Visualization"]["inferred"] is True
+    assert res_bi["details"]["SQL"]["inferred"] is True
+
+    # 2. PyTorch demonstrates Deep Learning and Machine Learning
+    resume_ml = "Projects: Trained convolutional neural networks using PyTorch."
+    ext_ml = extractor.extract_skills(resume_ml)
+    res_ml = matcher.match_skills(ext_ml, ["Deep Learning", "Machine Learning"], resume_text=resume_ml)
+    assert "Deep Learning" in res_ml["matched"], "PyTorch must infer Deep Learning!"
+    assert "Machine Learning" in res_ml["matched"], "PyTorch must infer Machine Learning!"
+
+
+def test_category_g_weighted_scoring_bounds_and_determinism(extractor, matcher):
+    """Category G: Scores must be strictly bounded [0, 100], mathematically consistent, and deterministic."""
+    resume = "Skills: SQL, Excel, Python"
+    reqs = get_required_skills("data-analyst")
+    
+    res1 = matcher.match_skills(extractor.extract_skills(resume), reqs, resume_text=resume)
+    res2 = matcher.match_skills(extractor.extract_skills(resume), reqs, resume_text=resume)
+
+    assert res1["score"] == res2["score"], "Scoring must be deterministic!"
+    assert 0.0 <= res1["score"] <= 100.0, "Score must be bounded between 0 and 100!"
+    assert res1["score"] > 0.0
+
+
+def test_category_h_role_isolation(extractor, matcher):
+    """Category H: Required skills must remain strictly isolated per job role."""
+    frontend_reqs = get_required_skills("frontend-developer")
+    devops_reqs = get_required_skills("devops-engineer")
+
+    frontend_names = {s["name"] for s in frontend_reqs}
+    devops_names = {s["name"] for s in devops_reqs}
+
+    assert "React" in frontend_names and "React" not in devops_names
+    assert "Kubernetes" in devops_names and "Kubernetes" not in frontend_names

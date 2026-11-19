@@ -151,11 +151,14 @@ class ResumeParser:
         # Normalize line breaks
         text = text.replace('\r\n', '\n').replace('\r', '\n')
 
+        # Replace non-breaking spaces, zero-width characters, and control characters
+        text = re.sub(r'[\xa0\u200b\u200c\u200d\u200e\u200f\t\f\v]', ' ', text)
+
+        # De-hyphenate broken words across line breaks (e.g. "Data-\nVisualization" -> "Data-Visualization")
+        text = re.sub(r'([a-zA-Z0-9]{2,})[-–—]\n\s*([a-zA-Z0-9]{2,})', r'\1-\2', text)
+
         # Replace non-standard bullets with standard bullet
         text = re.sub(r'[\u2022\u2023\u25E6\u2043\u2219\u25AA\u25AB\u25CF\u25CB\u25A0\u25A1]', ' • ', text)
-
-        # Replace non-breaking spaces and control characters
-        text = re.sub(r'[\xa0\t\f\v]', ' ', text)
 
         # Remove unprintable / non-ascii strange control characters, but keep printable unicode and punctuation
         text = re.sub(r'[^\x20-\x7E\n•]', ' ', text)

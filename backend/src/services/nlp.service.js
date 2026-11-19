@@ -340,13 +340,15 @@ const JOB_ROLES = {
         label: 'Frontend Developer',
         skills: [
             { name: 'JavaScript', level: 'advanced' },
+            { name: 'HTML', level: 'advanced' },
+            { name: 'CSS', level: 'advanced' },
             { name: 'React', level: 'advanced' },
             { name: 'TypeScript', level: 'intermediate' },
-            { name: 'CSS', level: 'advanced' },
-            { name: 'HTML', level: 'advanced' },
             { name: 'Git', level: 'intermediate' },
-            { name: 'Webpack', level: 'intermediate' },
-            { name: 'REST APIs', level: 'intermediate' },
+            { name: 'REST API', level: 'intermediate' },
+            { name: 'Tailwind', level: 'intermediate' },
+            { name: 'Redux', level: 'intermediate' },
+            { name: 'Jest', level: 'beginner' },
         ],
     },
     'backend-developer': {
@@ -354,12 +356,15 @@ const JOB_ROLES = {
         label: 'Backend Developer',
         skills: [
             { name: 'Node.js', level: 'advanced' },
-            { name: 'Python', level: 'intermediate' },
             { name: 'SQL', level: 'advanced' },
+            { name: 'REST API', level: 'advanced' },
+            { name: 'Express', level: 'advanced' },
+            { name: 'JavaScript', level: 'advanced' },
+            { name: 'Python', level: 'intermediate' },
             { name: 'MongoDB', level: 'intermediate' },
-            { name: 'REST APIs', level: 'advanced' },
-            { name: 'Docker', level: 'intermediate' },
+            { name: 'PostgreSQL', level: 'intermediate' },
             { name: 'Git', level: 'intermediate' },
+            { name: 'Docker', level: 'intermediate' },
         ],
     },
     'fullstack-developer': {
@@ -370,9 +375,13 @@ const JOB_ROLES = {
             { name: 'React', level: 'advanced' },
             { name: 'Node.js', level: 'advanced' },
             { name: 'SQL', level: 'intermediate' },
+            { name: 'HTML', level: 'advanced' },
+            { name: 'CSS', level: 'advanced' },
             { name: 'MongoDB', level: 'intermediate' },
-            { name: 'Docker', level: 'intermediate' },
-            { name: 'Git', level: 'advanced' },
+            { name: 'REST API', level: 'advanced' },
+            { name: 'Git', level: 'intermediate' },
+            { name: 'Docker', level: 'beginner' },
+            { name: 'TypeScript', level: 'intermediate' },
         ],
     },
     'data-scientist': {
@@ -381,11 +390,14 @@ const JOB_ROLES = {
         skills: [
             { name: 'Python', level: 'advanced' },
             { name: 'Machine Learning', level: 'advanced' },
-            { name: 'SQL', level: 'intermediate' },
-            { name: 'Statistics', level: 'advanced' },
-            { name: 'TensorFlow', level: 'intermediate' },
             { name: 'Pandas', level: 'advanced' },
-            { name: 'Data Visualization', level: 'intermediate' },
+            { name: 'Statistics', level: 'advanced' },
+            { name: 'NumPy', level: 'advanced' },
+            { name: 'Scikit-learn', level: 'advanced' },
+            { name: 'SQL', level: 'intermediate' },
+            { name: 'TensorFlow', level: 'intermediate' },
+            { name: 'Matplotlib', level: 'intermediate' },
+            { name: 'Deep Learning', level: 'intermediate' },
         ],
     },
     'devops-engineer': {
@@ -394,11 +406,14 @@ const JOB_ROLES = {
         skills: [
             { name: 'Docker', level: 'advanced' },
             { name: 'Kubernetes', level: 'advanced' },
-            { name: 'AWS', level: 'advanced' },
             { name: 'CI/CD', level: 'advanced' },
             { name: 'Linux', level: 'advanced' },
-            { name: 'Python', level: 'intermediate' },
+            { name: 'AWS', level: 'advanced' },
             { name: 'Terraform', level: 'intermediate' },
+            { name: 'Git', level: 'advanced' },
+            { name: 'Bash', level: 'advanced' },
+            { name: 'Python', level: 'intermediate' },
+            { name: 'Jenkins', level: 'intermediate' },
         ],
     },
     'data-analyst': {
@@ -609,33 +624,33 @@ const SKILL_PATTERNS = [
     /\b(azure)\b/gi,
     /\b(gcp|google cloud)\b/gi,
     /\b(git|github|gitlab)\b/gi,
-    /\b(ci\/cd|jenkins|circleci)\b/gi,
-    /\b(terraform)\b/gi,
-    /\b(linux|unix)\b/gi,
-    /\b(rest api|restful|graphql)\b/gi,
+    /\b(ci\/cd|ci-cd|ci cd|jenkins|circleci|continuous integration|continuous deployment)\b/gi,
+    /\b(terraform|hashicorp terraform|iac)\b/gi,
+    /\b(linux|unix|ubuntu|centos|debian|redhat|rhel)\b/gi,
+    /\b(rest api|rest apis|restful|restful api|restful apis|graphql)\b/gi,
     /\b(jest|mocha|cypress)\b/gi,
-    /\b(machine learning|ml)\b/gi,
-    /\b(deep learning)\b/gi,
-    /\b(tensorflow|pytorch)\b/gi,
-    /\b(scikit-learn|sklearn)\b/gi,
+    /\b(machine learning|ml|machine-learning|statistical learning)\b/gi,
+    /\b(deep learning|dl|deep-learning|deep neural networks|neural networks)\b/gi,
+    /\b(tensorflow|tf|pytorch)\b/gi,
+    /\b(scikit-learn|sklearn|scikit learn)\b/gi,
     /\b(pandas|numpy)\b/gi,
-    /\b(data analysis)\b/gi,
-    /\b(data visualization)\b/gi,
-    /\b(statistics)\b/gi,
-    /\b(tableau)\b/gi,
-    /\b(power bi)\b/gi,
-    /\b(excel|ms excel)\b/gi,
+    /\b(data analysis|data analytics|exploratory data analysis|eda)\b/gi,
+    /\b(data visuali[zs]ation|data viz|dataviz|data-viz|dashboarding|visual analytics)\b/gi,
+    /\b(statistics|stats|statistical analysis|statistical methods)\b/gi,
+    /\b(tableau|tableau desktop|tableau server)\b/gi,
+    /\b(power bi|power-bi|powerbi|pbi)\b/gi,
+    /\b(excel|ms excel|microsoft excel)\b/gi,
     /\b(figma)\b/gi,
-    /\b(ui design)\b/gi,
-    /\b(ux research)\b/gi,
-    /\b(prototyping)\b/gi,
+    /\b(ui design|user interface design|visual design)\b/gi,
+    /\b(ux research|user research|usability research|usability testing)\b/gi,
+    /\b(prototyping|rapid prototyping)\b/gi,
     /\b(adobe xd)\b/gi,
     /\b(agile|scrum)\b/gi,
     /\b(jira)\b/gi,
-    /\b(a\/b testing)\b/gi,
-    /\b(microservices)\b/gi,
-    /\b(networking)\b/gi,
-    /\b(security)\b/gi,
+    /\b(a\/b testing|ab testing|a-b testing|split testing|bucket testing)\b/gi,
+    /\b(microservices|micro-services|microservice architecture)\b/gi,
+    /\b(networking|computer networking|computer networks)\b/gi,
+    /\b(security|cybersecurity|infosec|application security)\b/gi,
 ];
 
 const SKILL_NAMES = {
@@ -713,24 +728,47 @@ const SKILL_NAMES = {
     'pandas': 'Pandas',
     'numpy': 'NumPy',
     'data analysis': 'Data Analysis',
+    'data analytics': 'Data Analysis',
+    'eda': 'Data Analysis',
     'data visualization': 'Data Visualization',
+    'data visualisation': 'Data Visualization',
+    'data viz': 'Data Visualization',
+    'dataviz': 'Data Visualization',
+    'data-viz': 'Data Visualization',
     'statistics': 'Statistics',
+    'stats': 'Statistics',
+    'statistical analysis': 'Statistics',
     'tableau': 'Tableau',
     'power bi': 'Power BI',
+    'power-bi': 'Power BI',
+    'powerbi': 'Power BI',
+    'pbi': 'Power BI',
     'excel': 'Excel',
     'ms excel': 'Excel',
+    'microsoft excel': 'Excel',
     'figma': 'Figma',
     'ui design': 'UI Design',
     'ux research': 'UX Research',
+    'user research': 'UX Research',
+    'usability research': 'UX Research',
     'prototyping': 'Prototyping',
     'adobe xd': 'Adobe XD',
     'agile': 'Agile',
     'scrum': 'Scrum',
     'jira': 'Jira',
     'a/b testing': 'A/B Testing',
+    'ab testing': 'A/B Testing',
+    'a-b testing': 'A/B Testing',
     'microservices': 'Microservices',
     'networking': 'Networking',
     'security': 'Security',
+    'pgsql': 'PostgreSQL',
+    'psql': 'PostgreSQL',
+    'k8s': 'Kubernetes',
+    'ci-cd': 'CI/CD',
+    'continuous integration': 'CI/CD',
+    'deep-learning': 'Deep Learning',
+    'machine-learning': 'Machine Learning',
 };
 
 /**
@@ -738,8 +776,23 @@ const SKILL_NAMES = {
  */
 function getCanonicalSkill(name) {
     if (!name) return '';
-    const lower = name.toLowerCase().trim();
-    return SKILL_NAMES[lower] || name.trim();
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    if (SKILL_NAMES[lower]) return SKILL_NAMES[lower];
+
+    // UK/US spelling normalization (e.g. visualisation -> visualization)
+    const normSpelling = lower
+        .replace(/(\b\w+)is(e|ed|ing|ation|ations)\b/gi, '$1iz$2')
+        .replace(/(\b\w+)lli(ng|ed)\b/gi, '$1li$2')
+        .replace(/(\b\w+)our(\w*)\b/gi, '$1or$2');
+
+    if (SKILL_NAMES[normSpelling]) return SKILL_NAMES[normSpelling];
+
+    // Hyphen-to-space normalization
+    const hyphenToSpace = lower.replace(/-/g, ' ');
+    if (SKILL_NAMES[hyphenToSpace]) return SKILL_NAMES[hyphenToSpace];
+
+    return trimmed;
 }
 
 /**

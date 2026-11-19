@@ -131,12 +131,12 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "UI Design": {
         "category": "frontend",
-        "aliases": ["ui design", "user interface design", "ui/ux", "ui ux", "user interface"],
+        "aliases": ["ui design", "user interface design", "ui/ux", "ui ux", "user interface", "visual design", "ui/ux design", "ui ux design"],
         "related": ["UX Research", "Figma"],
     },
     "Design Systems": {
         "category": "tools",
-        "aliases": ["design systems", "design system", "component library"],
+        "aliases": ["design systems", "design system", "component library", "ui library", "ui component library", "style guide"],
         "related": ["UI Design", "Figma"],
     },
 
@@ -291,7 +291,7 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "PostgreSQL": {
         "category": "database",
-        "aliases": ["postgresql", "postgres", "psql"],
+        "aliases": ["postgresql", "postgres", "psql", "pgsql", "postgre sql", "postgre-sql"],
         "related": ["SQL"],
     },
     "MySQL": {
@@ -378,25 +378,25 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "Docker": {
         "category": "cloud_devops",
-        "aliases": ["docker", "docker container", "docker containers", "dockerfile", "docker compose"],
+        "aliases": ["docker", "docker container", "docker containers", "dockerfile", "docker compose", "docker-compose", "containerization"],
         "related": ["Kubernetes", "DevOps"],
     },
     "Kubernetes": {
         "category": "cloud_devops",
-        "aliases": ["kubernetes", "k8s", "helm"],
+        "aliases": ["kubernetes", "k8s", "k8", "kube", "helm", "kubernetes cluster"],
         "related": ["Docker", "DevOps"],
     },
     "CI/CD": {
         "category": "cloud_devops",
         "aliases": [
-            "ci/cd", "cicd", "ci cd", "ci / cd",
+            "ci/cd", "cicd", "ci cd", "ci-cd", "ci / cd",
             "continuous integration", "continuous deployment", "continuous delivery"
         ],
         "related": ["Jenkins", "GitHub Actions"],
     },
     "Terraform": {
         "category": "cloud_devops",
-        "aliases": ["terraform", "infrastructure as code", "iac"],
+        "aliases": ["terraform", "infrastructure as code", "iac", "hashicorp terraform"],
         "related": ["AWS", "DevOps"],
     },
     "Ansible": {
@@ -406,7 +406,7 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "Jenkins": {
         "category": "cloud_devops",
-        "aliases": ["jenkins"],
+        "aliases": ["jenkins", "jenkins ci", "jenkins pipeline"],
         "related": ["CI/CD"],
     },
     "GitHub Actions": {
@@ -436,12 +436,12 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "Networking": {
         "category": "cloud_devops",
-        "aliases": ["networking", "computer networks", "tcp/ip", "dns", "vpn", "vpc"],
+        "aliases": ["networking", "computer networking", "computer networks", "tcp/ip", "dns", "vpn", "vpc", "subnets", "load balancing", "network protocols"],
         "related": ["Cloud Architect", "Linux"],
     },
     "Security": {
         "category": "cloud_devops",
-        "aliases": ["security", "cybersecurity", "information security", "infosec", "appsec", "oauth", "jwt"],
+        "aliases": ["security", "cybersecurity", "information security", "infosec", "appsec", "application security", "network security", "cloud security", "iam", "oauth", "jwt"],
         "related": ["DevOps"],
     },
 
@@ -450,12 +450,18 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     # ==========================================
     "Machine Learning": {
         "category": "data_ml",
-        "aliases": ["machine learning", "ml", "supervised learning", "unsupervised learning"],
+        "aliases": [
+            "machine learning", "ml", "supervised learning", "unsupervised learning",
+            "machine-learning", "statistical learning", "ml algorithms", "machine learning algorithms"
+        ],
         "related": ["Python", "Deep Learning"],
     },
     "Deep Learning": {
         "category": "data_ml",
-        "aliases": ["deep learning", "dl", "artificial neural networks", "ann", "cnn", "rnn", "transformers"],
+        "aliases": [
+            "deep learning", "dl", "artificial neural networks", "ann", "cnn", "rnn", "transformers",
+            "deep-learning", "deep neural networks", "neural networks"
+        ],
         "related": ["Machine Learning", "PyTorch", "TensorFlow"],
     },
     "Natural Language Processing": {
@@ -470,7 +476,7 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "TensorFlow": {
         "category": "data_ml",
-        "aliases": ["tensorflow", "tf"],
+        "aliases": ["tensorflow", "tf", "tensorflow 2", "tf2"],
         "related": ["Python", "Deep Learning", "Keras"],
     },
     "PyTorch": {
@@ -485,12 +491,12 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "Scikit-learn": {
         "category": "data_ml",
-        "aliases": ["scikit-learn", "scikit learn", "sklearn"],
+        "aliases": ["scikit-learn", "scikit learn", "sklearn", "scikitlearn"],
         "related": ["Python", "Machine Learning"],
     },
     "Pandas": {
         "category": "data_ml",
-        "aliases": ["pandas"],
+        "aliases": ["pandas", "pandas dataframes", "pandas dataframe"],
         "related": ["Python", "Data Analysis"],
     },
     "NumPy": {
@@ -500,7 +506,7 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "Matplotlib": {
         "category": "data_ml",
-        "aliases": ["matplotlib"],
+        "aliases": ["matplotlib", "plt"],
         "related": ["Python", "Data Visualization"],
     },
     "Seaborn": {
@@ -510,17 +516,20 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "Statistics": {
         "category": "data_ml",
-        "aliases": ["statistics", "statistical analysis", "stats", "biostatistics", "probability and statistics"],
+        "aliases": ["statistics", "statistical analysis", "stats", "biostatistics", "probability and statistics", "statistical methods"],
         "related": ["Data Analysis", "Machine Learning"],
     },
     "Data Visualization": {
         "category": "data_ml",
-        "aliases": ["data visualization", "data viz", "dataviz", "dashboarding", "visual analytics"],
+        "aliases": [
+            "data visualization", "data visualisation", "data viz", "dataviz", "data-viz",
+            "dashboarding", "visual analytics", "bi reporting", "charting", "dashboard creation", "data reporting"
+        ],
         "related": ["Tableau", "Power BI"],
     },
     "Data Analysis": {
         "category": "data_ml",
-        "aliases": ["data analysis", "data analytics", "exploratory data analysis", "eda"],
+        "aliases": ["data analysis", "data analytics", "exploratory data analysis", "eda", "data insights", "data-analysis"],
         "related": ["SQL", "Excel", "Python"],
     },
     "MLOps": {
@@ -532,21 +541,21 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
         "category": "tools",
         "aliases": [
             "excel", "microsoft excel", "ms excel", "vba",
-            "excel modeling", "pivot tables", "vlookup", "xlookup"
+            "excel modeling", "pivot tables", "vlookup", "xlookup", "spreadsheets", "advanced excel"
         ],
         "related": ["Data Analysis", "Power BI"],
     },
     "Power BI": {
         "category": "tools",
         "aliases": [
-            "power bi", "microsoft power bi", "ms power bi",
-            "powerbi", "dax", "power query"
+            "power bi", "power-bi", "microsoft power bi", "ms power bi",
+            "powerbi", "dax", "power query", "pbi"
         ],
         "related": ["Excel", "Data Visualization", "SQL"],
     },
     "Tableau": {
         "category": "tools",
-        "aliases": ["tableau", "tableau desktop", "tableau server"],
+        "aliases": ["tableau", "tableau desktop", "tableau server", "tableau public"],
         "related": ["Data Visualization", "SQL"],
     },
 
@@ -635,28 +644,95 @@ SKILL_TAXONOMY: Dict[str, Dict] = {
     },
     "UX Research": {
         "category": "tools",
-        "aliases": ["ux research", "user research", "user experience research", "heuristic evaluation"],
+        "aliases": ["ux research", "user research", "user experience research", "heuristic evaluation", "usability research", "usability testing"],
         "related": ["User Testing", "UI Design"],
     },
     "User Testing": {
         "category": "tools",
-        "aliases": ["user testing", "usability testing", "user interviews"],
+        "aliases": ["user testing", "usability testing", "user interviews", "usability test", "user feedback sessions", "uat", "user acceptance testing"],
         "related": ["UX Research"],
     },
     "A/B Testing": {
         "category": "tools",
-        "aliases": ["a/b testing", "ab testing", "split testing", "multivariate testing"],
+        "aliases": ["a/b testing", "ab testing", "a-b testing", "split testing", "multivariate testing", "bucket testing", "hypothesis testing", "a/b tests"],
         "related": ["Product Strategy", "Data Analysis"],
     },
     "Product Strategy": {
         "category": "tools",
         "aliases": [
             "product strategy", "product roadmap", "roadmap planning",
-            "product management", "feature prioritization", "product discovery"
+            "product management", "feature prioritization", "product discovery",
+            "product roadmapping", "product vision", "gtm strategy", "go-to-market strategy"
         ],
         "related": ["Agile", "User Research"],
     },
 }
+
+# ==========================================
+# CENTRALIZED SKILL ONTOLOGY (INFERENCE RULES)
+# ==========================================
+# Defines structured parent-child and tool-to-concept relationships.
+# If a parent competency is required, demonstrating a child tool provides
+# verified contextual evidence of competency in that parent skill.
+SKILL_ONTOLOGY: Dict[str, Dict] = {
+    "Data Visualization": {
+        "tools": ["Power BI", "Tableau", "Matplotlib", "Seaborn"],
+        "description": "Visual representation of data and dashboard creation",
+    },
+    "SQL": {
+        "tools": ["PostgreSQL", "MySQL"],
+        "description": "Structured Query Language for relational database management",
+    },
+    "Machine Learning": {
+        "tools": ["Scikit-learn", "TensorFlow", "PyTorch", "MLOps"],
+        "description": "Machine learning algorithms and predictive modeling",
+    },
+    "Deep Learning": {
+        "tools": ["TensorFlow", "PyTorch"],
+        "description": "Deep neural network architectures",
+    },
+    "Docker": {
+        "tools": ["Kubernetes"],
+        "description": "Containerization platform",
+    },
+    "Statistics": {
+        "tools": ["A/B Testing"],
+        "description": "Statistical modeling and quantitative hypothesis testing",
+    },
+    "Data Analysis": {
+        "tools": ["Pandas", "Tableau", "Power BI"],
+        "description": "Exploratory data analysis and analytics",
+    },
+    "UI Design": {
+        "tools": ["Figma", "Adobe XD", "Design Systems"],
+        "description": "User interface visual design",
+    },
+    "UX Research": {
+        "tools": ["User Testing", "Prototyping"],
+        "description": "User experience research and usability analysis",
+    },
+}
+
+
+def normalize_spelling(term: str) -> str:
+    """
+    Normalize UK and international spelling variations to canonical US spelling.
+    Examples:
+        'visualisation' -> 'visualization'
+        'modelling' -> 'modeling'
+        'optimisation' -> 'optimization'
+        'organisation' -> 'organization'
+        'analysing' -> 'analyzing'
+        'behaviour' -> 'behavior'
+    """
+    if not term:
+        return ""
+    t = term
+    t = re.sub(r'(\b\w+)is(e|ed|ing|ation|ations)\b', r'\1iz\2', t, flags=re.IGNORECASE)
+    t = re.sub(r'(\b\w+)lli(ng|ed)\b', r'\1li\2', t, flags=re.IGNORECASE)
+    t = re.sub(r'(\b\w+)our(\w*)\b', r'\1or\2', t, flags=re.IGNORECASE)
+    t = re.sub(r'(\b\w+)lys(e|ed|ing)\b', r'\1lyz\2', t, flags=re.IGNORECASE)
+    return t
 
 
 class SkillTaxonomy:
@@ -719,15 +795,15 @@ class SkillTaxonomy:
         Handles alphanumeric boundaries as well as special characters
         (like C++, C#, .NET, Node.js, A/B Testing, CI/CD).
         Prevents .js and .ts from matching file/framework extensions (e.g. Node.js).
+        Supports flexible whitespace, hyphens, and UK/US spelling variations.
         """
-        escaped = re.escape(term)
         lower_term = term.lower()
 
         # For terms that could be file extensions or short suffixes (.js, .ts, .py)
         if lower_term in ("js", "ts", "py"):
             prefix = r'(?<![\.a-zA-Z0-9])'
             suffix = r'(?![a-zA-Z0-9])'
-            return re.compile(prefix + escaped + suffix, re.IGNORECASE)
+            return re.compile(prefix + re.escape(term) + suffix, re.IGNORECASE)
 
         # For common single/short words like "go", avoid matching the common English verb
         if lower_term == "go":
@@ -735,6 +811,32 @@ class SkillTaxonomy:
             suffix = r'(?![a-zA-Z0-9])'
             # Must be exact case "Go" to avoid matching verb "go"
             return re.compile(prefix + r'Go' + suffix)
+
+        # Build flexible escaped regex for words with whitespace or hyphens or slashes
+        # E.g., "Data Visualization" matches "Data Visualization", "Data-Visualization", "Data\s+Visualization", "Data Visualisation"
+        parts = re.split(r'[\s\-_]+', term.strip())
+        escaped_parts = []
+        for p in parts:
+            if not p:
+                continue
+            # Support slashes like A/B or CI/CD
+            sub_slash = re.split(r'\/', p)
+            if len(sub_slash) > 1:
+                sub_escaped = [re.escape(s) for s in sub_slash]
+                p_escaped = r'[\/\-_]'.join(sub_escaped)
+            else:
+                p_escaped = re.escape(p)
+
+            # UK/US variations:
+            # - visualization / visualisation
+            # - modeling / modelling
+            # - optimization / optimisation
+            p_escaped = re.sub(r'i[zs](e|ed|ing|ation|ations)', r'i[zs]\1', p_escaped, flags=re.IGNORECASE)
+            p_escaped = re.sub(r'll?i(ng|ed)', r'll?i\1', p_escaped, flags=re.IGNORECASE)
+            escaped_parts.append(p_escaped)
+
+        # Join parts with flexible separator: allows spaces, hyphens, underscores, or newlines
+        pattern_core = r'[\s\-_]+'.join(escaped_parts)
 
         # Left boundary
         if term[0].isalnum():
@@ -750,7 +852,7 @@ class SkillTaxonomy:
             # Fixed-width lookahead for special trailing characters
             suffix = r'(?:(?=$)|(?=[\s,;:()[\]{}`"\'•·\-\/\\|~<>]))'
 
-        return re.compile(prefix + escaped + suffix, re.IGNORECASE)
+        return re.compile(prefix + pattern_core + suffix, re.IGNORECASE)
 
 
     def get_canonical(self, skill_name: str) -> str:
@@ -765,6 +867,7 @@ class SkillTaxonomy:
             'postgres' -> 'PostgreSQL'
             'RESTful APIs' -> 'REST API'
             'Microsoft Excel' -> 'Excel'
+            'Data Visualisation' -> 'Data Visualization'
         If unknown, returns trimmed title-cased name.
         """
         if not skill_name:
@@ -777,6 +880,16 @@ class SkillTaxonomy:
         if lower in self.alias_to_canonical:
             return self.alias_to_canonical[lower]
 
+        # Normalized UK/US spelling lookup
+        norm_lower = normalize_spelling(lower)
+        if norm_lower in self.alias_to_canonical:
+            return self.alias_to_canonical[norm_lower]
+
+        # Check hyphen to space variations
+        hyphen_to_space = lower.replace('-', ' ')
+        if hyphen_to_space in self.alias_to_canonical:
+            return self.alias_to_canonical[hyphen_to_space]
+
         # Check punctuation variations (e.g. 'react-js' -> 'react.js')
         dash_to_dot = lower.replace('-', '.')
         if dash_to_dot in self.alias_to_canonical:
@@ -787,7 +900,28 @@ class SkillTaxonomy:
         if version_stripped in self.alias_to_canonical:
             return self.alias_to_canonical[version_stripped]
 
+        norm_version_stripped = normalize_spelling(version_stripped)
+        if norm_version_stripped in self.alias_to_canonical:
+            return self.alias_to_canonical[norm_version_stripped]
+
         return cleaned
+
+    def get_child_tools(self, parent_canonical: str) -> List[str]:
+        """Get child tools that imply/demonstrate this parent competency."""
+        canonical = self.get_canonical(parent_canonical)
+        if canonical in SKILL_ONTOLOGY:
+            return SKILL_ONTOLOGY[canonical].get("tools", [])
+        return []
+
+    def get_inferred_parent(self, tool_canonical: str) -> List[str]:
+        """Get parent competencies that can be inferred from proficiency in this tool."""
+        canonical = self.get_canonical(tool_canonical)
+        parents = []
+        for parent, data in SKILL_ONTOLOGY.items():
+            child_tools = [self.get_canonical(t).lower() for t in data.get("tools", [])]
+            if canonical.lower() in child_tools:
+                parents.append(parent)
+        return parents
 
     def get_category(self, canonical_or_alias: str) -> str:
         """Get skill category (e.g., 'frontend', 'backend', 'tools')."""
