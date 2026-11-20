@@ -174,7 +174,7 @@ function UploadPage() {
                 cooldownTime = 15
             } else if (err.status === 504 || err.status === 503) {
                 friendlyMsg = err.message || 'The AI analysis engine is currently warming up. Please wait a few moments and try again.'
-                cooldownTime = 20
+                cooldownTime = 10
             }
             setAnalysisError(friendlyMsg)
             toast.error(friendlyMsg)
@@ -519,9 +519,13 @@ function UploadPage() {
                         <div className="max-w-sm mx-auto p-3.5 rounded-2xl bg-cyan-500/5 border border-cyan-500/15 text-left flex items-start gap-2.5">
                             <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                             <div className="space-y-0.5">
-                                <p className="text-xs font-semibold text-cyan-200">Deep AI Benchmarking Active</p>
+                                <p className="text-xs font-semibold text-cyan-200">
+                                    {elapsedTime >= 40 ? 'Cloud Neural Models Booting' : 'Deep AI Benchmarking Active'}
+                                </p>
                                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                                    Our NLP models evaluate each experience and project in depth (~30–45s). Please keep this tab open — results will appear automatically.
+                                    {elapsedTime >= 40
+                                        ? 'Cloud instance is initializing (~50-60s on free tier). Your document is in flight, please keep this tab open.'
+                                        : 'Our NLP models evaluate each experience and project in depth (~30–45s). Please keep this tab open — results will appear automatically.'}
                                 </p>
                             </div>
                         </div>

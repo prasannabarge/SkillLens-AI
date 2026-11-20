@@ -169,7 +169,19 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
             const statusCode = error.response?.status;
             const errorCode = error.code;
 
-            // Handle HTTP 429 Rate Limiting with Bounded Exponential Backoff
+            // 1. Permanent client errors: Fail fast immediately without retrying
+            // HTTP 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 422 (Validation Error)
+            if (statusCode && [400, 401, 403, 422].includes(statusCode)) {
+                const detailMsg =
+                    error.response?.data?.detail ||
+                    error.response?.data?.message ||
+                    error.response?.data?.error ||
+                    'Could not process the uploaded resume format.';
+                console.warn(`[${reqId}] ⚠️ NLP permanent client error (${statusCode}): ${detailMsg}. Failing fast without retry.`);
+                throw new AppError(detailMsg, statusCode === 422 ? 400 : statusCode);
+            }
+
+            // 2. Handle HTTP 429 Rate Limiting with Bounded Exponential Backoff
             if (statusCode === 429 && attempt < maxRetries) {
                 const retryAfterHeader = error.response?.headers?.['retry-after'];
                 const exponentialBase = 2000 * Math.pow(2, attempt);
@@ -187,7 +199,29 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
                 continue;
             }
 
-            // If 429 rate limit is exhausted
+            // 3. Handle transient cold-start / network failures with exactly ONE controlled retry
+            // Covers HTTP 502, 503, 504, ECONNREFUSED, ENOTFOUND, EAI_AGAIN, ERR_NETWORK,
+            // or fast socket timeouts (<35s) during cloud container boot
+            const isTransientFailure =
+                errorCode === 'ECONNREFUSED' ||
+                errorCode === 'ENOTFOUND' ||
+                errorCode === 'EAI_AGAIN' ||
+                errorCode === 'ERR_NETWORK' ||
+                (statusCode && [502, 503, 504].includes(statusCode)) ||
+                ((errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') && duration < 35000);
+
+            if (isTransientFailure && attempt < maxRetries) {
+                const coldStartDelayMs = process.env.NODE_ENV === 'test' ? 50 : (typeof options.retryDelayMs === 'number' ? options.retryDelayMs : 5000);
+                console.warn(
+                    `[${reqId}] ⚠️ NLP Service transient failure (${errorCode || statusCode}, duration=${duration}ms). ` +
+                    `Controlled cold-start recovery retry in ${coldStartDelayMs}ms (attempt ${attempt + 1}/${maxRetries + 1}).`
+                );
+                await sleep(coldStartDelayMs);
+                attempt++;
+                continue;
+            }
+
+            // 4. Exhausted retries or non-recoverable transient failure:
             if (statusCode === 429) {
                 const retryAfterHeader = error.response?.headers?.['retry-after'];
                 console.error(
@@ -207,10 +241,9 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
                 throw rateLimitError;
             }
 
-            // Handle timeout / cold-start delay honestly without superficial fallback
-            if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
+            if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT' || statusCode === 504) {
                 console.error(
-                    `[${reqId}] ❌ NLP service timed out after ${duration}ms (code=${errorCode}). Downstream engine is likely warming up.`
+                    `[${reqId}] ❌ NLP service timed out after ${duration}ms (code=${errorCode || statusCode}, attempts=${attempt + 1}). Downstream engine is likely warming up.`
                 );
                 if (options.allowFallback) {
                     console.warn(`[${reqId}] ⚠️ Fallback explicitly requested via options.`);
@@ -222,17 +255,16 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
                 );
             }
 
-            // Check if downstream service is unavailable, restarting, or network failed
             const isDownstreamUnavailable =
                 errorCode === 'ECONNREFUSED' ||
                 errorCode === 'ENOTFOUND' ||
                 errorCode === 'EAI_AGAIN' ||
                 errorCode === 'ERR_NETWORK' ||
-                (statusCode && [502, 503, 504].includes(statusCode));
+                (statusCode && [502, 503].includes(statusCode));
 
             if (isDownstreamUnavailable) {
                 console.error(
-                    `[${reqId}] ❌ NLP service unavailable (code=${errorCode || statusCode}, duration=${duration}ms).`
+                    `[${reqId}] ❌ NLP service unavailable after ${attempt + 1} attempts (code=${errorCode || statusCode}, duration=${duration}ms).`
                 );
                 if (options.allowFallback) {
                     console.warn(`[${reqId}] ⚠️ Fallback explicitly requested via options.`);
@@ -242,16 +274,6 @@ exports.analyzeResume = async (filePath, targetRole, options = {}) => {
                     'The AI analysis service is temporarily unavailable. Please try again shortly.',
                     503
                 );
-            }
-
-            // Handle user-facing document/validation errors from FastAPI
-            if (statusCode === 400 || statusCode === 422) {
-                const detailMsg =
-                    error.response?.data?.detail ||
-                    error.response?.data?.error ||
-                    'Could not process the uploaded resume format.';
-                console.warn(`[${reqId}] ⚠️ NLP client error (${statusCode}): ${detailMsg}`);
-                throw new AppError(detailMsg, 400);
             }
 
             console.error(`[${reqId}] ❌ NLP analysis failed (${statusCode || errorCode}): ${error.message}`);

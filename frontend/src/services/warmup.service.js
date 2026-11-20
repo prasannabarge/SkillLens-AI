@@ -71,7 +71,7 @@ export async function warmUpCloudServices() {
     const pingNlpMicroservice = async () => {
         try {
             const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 15000)
+            const timeoutId = setTimeout(() => controller.abort(), 60000)
             await fetch(`${NLP_ORIGIN}/health`, {
                 method: 'GET',
                 mode: 'no-cors',
@@ -88,7 +88,7 @@ export async function warmUpCloudServices() {
     const pingBackendService = async () => {
         try {
             const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 15000)
+            const timeoutId = setTimeout(() => controller.abort(), 60000)
             await fetch(`${BACKEND_ORIGIN}/health`, {
                 method: 'GET',
                 mode: 'no-cors',
